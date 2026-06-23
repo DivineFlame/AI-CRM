@@ -32,6 +32,8 @@ import { gatherWebsiteData } from './website.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
+const host = process.env.HOST || '0.0.0.0';
+const publicBaseUrl = process.env.APP_BASE_URL || process.env.PUBLIC_BASE_URL || `http://localhost:${port}`;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, '../dist');
 let queueRunning = false;
@@ -531,8 +533,8 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`AI CRM API listening on http://127.0.0.1:${port}`);
+app.listen(port, host, () => {
+  console.log(`AI CRM API listening on ${publicBaseUrl}`);
 });
 
 async function runSendQueue() {

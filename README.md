@@ -20,9 +20,11 @@ COMPOSIO_USER_ID=owner@example.com
 COMPOSIO_GMAIL_AUTH_CONFIG_ID=ac_your_gmail_auth_config
 COMPOSIO_GMAIL_CONNECTED_ACCOUNT_ID=
 COMPOSIO_GMAIL_TOOLKIT_VERSION=20260506_01
-APP_BASE_URL=https://your-deployed-domain.example.com
+APP_BASE_URL=http://38.247.188.228
+PUBLIC_BASE_URL=http://38.247.188.228
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=llama3.1
+HOST=0.0.0.0
 PORT=4000
 ```
 
@@ -42,7 +44,7 @@ Recommended Dokploy settings:
 - Compose file: `docker-compose.yml`
 - Exposed app port: `4000`
 - Health check path: `/api/health`
-- Environment variables: set `COMPOSIO_API_KEY`, `COMPOSIO_USER_ID`, `COMPOSIO_GMAIL_AUTH_CONFIG_ID`, `APP_BASE_URL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
+- Environment variables: set `COMPOSIO_API_KEY`, `COMPOSIO_USER_ID`, `COMPOSIO_GMAIL_AUTH_CONFIG_ID`, `APP_BASE_URL`, `PUBLIC_BASE_URL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
 
 The Node server serves both the API and the built React app in production.
 
@@ -51,7 +53,7 @@ The Node server serves both the API and the built React app in production.
 1. In Composio, create or select a Gmail auth config.
 2. Copy the auth config ID, usually beginning with `ac_`.
 3. Set `COMPOSIO_GMAIL_AUTH_CONFIG_ID` in Dokploy.
-4. Set `APP_BASE_URL` to your deployed app URL so the Gmail authorization callback returns to `/api/gmail/callback`.
+4. Set `APP_BASE_URL` to your deployed app URL, for example `http://38.247.188.228`, so the Gmail authorization callback returns to `/api/gmail/callback`.
 5. Open the app, enter the Gmail address, and click `Connect`.
 6. After OAuth, use `Check` in the Gmail panel or call:
 
