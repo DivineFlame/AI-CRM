@@ -23,7 +23,7 @@ body {
   color: var(--ink);
 }
 
-button, input, textarea {
+button, input, textarea, select {
   font: inherit;
 }
 
@@ -165,7 +165,7 @@ h1 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 .metric {
@@ -226,7 +226,7 @@ h2 {
   font-size: 13px;
   font-weight: 650;
 }
-input, textarea {
+input, textarea, select {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--line);
@@ -239,7 +239,12 @@ textarea {
   resize: vertical;
   min-height: 92px;
 }
-input:focus, textarea:focus {
+input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--green);
+}
+input:focus, textarea:focus, select:focus {
   outline: 2px solid #b9d7cd;
   border-color: var(--green);
 }
@@ -277,7 +282,7 @@ input:focus, textarea:focus {
   gap: 12px;
   margin-bottom: 14px;
 }
-.products, .email-list, .approval-grid {
+.products, .email-list, .approval-grid, .template-list, .queue-list, .recipient-list {
   display: grid;
   gap: 12px;
 }
@@ -319,6 +324,9 @@ input:focus, textarea:focus {
 .status.pending { color: var(--amber); background: #fff4dd; }
 .status.drafted { color: var(--blue); background: var(--soft-blue); }
 .status.sent { color: var(--green); background: var(--soft-green); }
+.status.queued { color: var(--blue); background: var(--soft-blue); }
+.status.sending { color: var(--amber); background: #fff4dd; }
+.status.failed { color: var(--red); background: #fee4e2; }
 
 .lead-table {
   border: 1px solid var(--line);
@@ -374,6 +382,59 @@ input:focus, textarea:focus {
   min-height: 180px;
 }
 
+.template-list {
+  margin-top: 14px;
+}
+.template-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+.template-card textarea {
+  min-height: 120px;
+}
+.recipient-list {
+  margin-top: 14px;
+}
+.recipient-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.recipient-row span, .queue-row span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+.recipient-row small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.campaign-editor {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.campaign-editor textarea {
+  min-height: 190px;
+}
+.queue-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .empty {
   min-height: 76px;
   border: 1px dashed #b7c4cf;
@@ -406,5 +467,5 @@ input:focus, textarea:focus {
     grid-template-columns: 1fr;
     gap: 8px;
   }
-  .item-card, .email-row { grid-template-columns: 1fr; }
+  .item-card, .email-row, .queue-row { grid-template-columns: 1fr; }
 }

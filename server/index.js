@@ -12,6 +12,7 @@ import {
   draftEmailReply,
   generateCampaignDraft,
   generateLeadBrief,
+  generateMarketingEmailDraft,
   generateNextBestAction,
   getOllamaStatus
 } from './ollama.js';
@@ -20,6 +21,7 @@ import {
   createGmailConnection,
   fetchRecentEmails,
   getGmailConfigurationStatus,
+  sendEmail,
   sendDraft
 } from './composio.js';
 import { createId, loadState, updateState } from './store.js';
@@ -28,6 +30,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, '../dist');
+let queueRunning = false;
 
 app.set('trust proxy', 1);
 app.use(helmet({
@@ -91,6 +94,39 @@ app.delete('/api/products/:id', async (req, res) => {
   await updateState((state) => ({
     ...state,
     products: state.products.filter((product) => product.id !== req.params.id)
+  }));
+  res.status(204).end();
+});
+
+app.post('/api/templates', async (req, res) => {
+  const template = {
+    id: createId('tpl'),
+    name: req.body.name || 'New Template',
+    subject: req.body.subject || '',
+    body: req.body.body || '',
+    tone: req.body.tone || 'professional',
+    createdAt: new Date().toISOString()
+  };
+  await updateState((state) => ({ ...state, templates: [template, ...state.templates] }));
+  res.status(201).json(template);
+});
+
+app.patch('/api/templates/:id', async (req, res) => {
+  const state = await updateState((current) => ({
+    ...current,
+    templates: current.templates.map((template) =>
+      template.id === req.params.id ? { ...template, ...req.body, updatedAt: new Date().toISOString() } : template
+    )
+  }));
+  const template = state.templates.find((item) => item.id === req.params.id);
+  if (!template) return res.status(404).json({ error: 'Template not found' });
+  res.json(template);
+});
+
+app.delete('/api/templates/:id', async (req, res) => {
+  await updateState((state) => ({
+    ...state,
+    templates: state.templates.filter((template) => template.id !== req.params.id)
   }));
   res.status(204).end();
 });
@@ -185,6 +221,107 @@ app.post('/api/ai/campaign', async (req, res) => {
   res.json(await generateCampaignDraft(state.company, state.products, state.leads));
 });
 
+app.post('/api/campaigns/draft', async (req, res) => {
+  const state = await loadState();
+  const selectedLeadIds = req.body.leadIds || [];
+  const leads = state.leads.filter((lead) => selectedLeadIds.includes(lead.id));
+  if (!leads.length) return res.status(400).json({ error: 'Select at least one lead' });
+
+  const template = state.templates.find((item) => item.id === req.body.templateId) || state.templates[0];
+  const draft = await generateMarketingEmailDraft({
+    company: state.company,
+    products: state.products,
+    leads,
+    template,
+    goal: req.body.goal
+  });
+
+  const campaign = {
+    id: createId('camp'),
+    name: req.body.name || `Campaign ${new Date().toLocaleDateString()}`,
+    templateId: template?.id || '',
+    leadIds: leads.map((lead) => lead.id),
+    subject: draft.subject,
+    body: draft.body,
+    goal: req.body.goal || draft.rationale,
+    status: 'draft',
+    delaySeconds: Number(req.body.delaySeconds || 60),
+    createdAt: new Date().toISOString()
+  };
+
+  await updateState((current) => ({ ...current, campaigns: [campaign, ...current.campaigns] }));
+  res.status(201).json({ campaign, draft });
+});
+
+app.patch('/api/campaigns/:id', async (req, res) => {
+  const state = await updateState((current) => ({
+    ...current,
+    campaigns: current.campaigns.map((campaign) =>
+      campaign.id === req.params.id ? { ...campaign, ...req.body, updatedAt: new Date().toISOString() } : campaign
+    )
+  }));
+  const campaign = state.campaigns.find((item) => item.id === req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  res.json(campaign);
+});
+
+app.post('/api/campaigns/:id/queue', async (req, res) => {
+  const state = await loadState();
+  const campaign = state.campaigns.find((item) => item.id === req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const leads = state.leads.filter((lead) => campaign.leadIds.includes(lead.id) && lead.email);
+  if (!leads.length) return res.status(400).json({ error: 'Campaign has no leads with email addresses' });
+
+  const delaySeconds = Math.max(5, Number(req.body.delaySeconds || campaign.delaySeconds || 60));
+  const queuedItems = leads.map((lead, index) => ({
+    id: createId('queue'),
+    campaignId: campaign.id,
+    leadId: lead.id,
+    to: lead.email,
+    subject: renderTemplate(campaign.subject, state.company, state.products, lead),
+    body: renderTemplate(campaign.body, state.company, state.products, lead),
+    status: 'queued',
+    delaySeconds,
+    sequence: index + 1,
+    createdAt: new Date().toISOString()
+  }));
+
+  await updateState((current) => ({
+    ...current,
+    campaigns: current.campaigns.map((item) =>
+      item.id === campaign.id ? { ...item, status: 'queued', delaySeconds, queuedAt: new Date().toISOString() } : item
+    ),
+    sendQueue: [
+      ...current.sendQueue.filter((item) => item.campaignId !== campaign.id || item.status === 'sent'),
+      ...queuedItems
+    ]
+  }));
+
+  res.status(201).json({ queued: queuedItems.length, delaySeconds });
+});
+
+app.post('/api/queue/run', async (req, res) => {
+  if (queueRunning) return res.json({ running: true, message: 'Queue is already running' });
+  queueRunning = true;
+  runSendQueue().finally(() => {
+    queueRunning = false;
+  });
+  res.json({ running: true, message: 'Queue started' });
+});
+
+app.get('/api/queue/status', async (req, res) => {
+  const state = await loadState();
+  res.json({
+    running: queueRunning,
+    counts: state.sendQueue.reduce((counts, item) => {
+      counts[item.status] = (counts[item.status] || 0) + 1;
+      return counts;
+    }, {}),
+    sendQueue: state.sendQueue
+  });
+});
+
 app.post('/api/leads/:id/next-action', async (req, res) => {
   const state = await loadState();
   const lead = state.leads.find((item) => item.id === req.params.id);
@@ -259,3 +396,64 @@ app.use((error, req, res, next) => {
 app.listen(port, () => {
   console.log(`AI CRM API listening on http://127.0.0.1:${port}`);
 });
+
+async function runSendQueue() {
+  while (true) {
+    const state = await loadState();
+    const nextItem = state.sendQueue
+      .filter((item) => item.status === 'queued')
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '') || a.sequence - b.sequence)[0];
+
+    if (!nextItem) return;
+
+    await updateState((current) => ({
+      ...current,
+      sendQueue: current.sendQueue.map((item) =>
+        item.id === nextItem.id ? { ...item, status: 'sending', startedAt: new Date().toISOString() } : item
+      )
+    }));
+
+    try {
+      const result = await sendEmail(nextItem.to, nextItem.subject, nextItem.body);
+      await updateState((current) => ({
+        ...current,
+        sendQueue: current.sendQueue.map((item) =>
+          item.id === nextItem.id
+            ? { ...item, status: 'sent', providerId: result.id || result.message_id || '', sentAt: new Date().toISOString() }
+            : item
+        )
+      }));
+    } catch (error) {
+      await updateState((current) => ({
+        ...current,
+        sendQueue: current.sendQueue.map((item) =>
+          item.id === nextItem.id
+            ? { ...item, status: 'failed', error: error.message, failedAt: new Date().toISOString() }
+            : item
+        )
+      }));
+    }
+
+    const latest = await loadState();
+    if (latest.sendQueue.some((item) => item.status === 'queued')) {
+      await sleep(Math.max(5, Number(nextItem.delaySeconds || 60)) * 1000);
+    }
+  }
+}
+
+function renderTemplate(value, company, products, lead) {
+  const firstName = (lead.contactName || lead.email || 'there').split(' ')[0];
+  const productName = lead.interest || products[0]?.name || 'our solution';
+  return String(value || '')
+    .replaceAll('{{firstName}}', firstName)
+    .replaceAll('{{contactName}}', lead.contactName || firstName)
+    .replaceAll('{{leadCompany}}', lead.companyName || '')
+    .replaceAll('{{companyName}}', company.name || '')
+    .replaceAll('{{productName}}', productName)
+    .replaceAll('{{interest}}', lead.interest || productName)
+    .replaceAll('{{email}}', lead.email || '');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

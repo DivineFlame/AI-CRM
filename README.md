@@ -69,8 +69,21 @@ For Composio-managed OAuth, the app uses `connectedAccounts.link(userId, authCon
 - AI sales brief for current leads and approvals
 - AI campaign draft from company profile, products, and leads
 - Per-lead next-best-action generation
+- AI marketing email drafts using approved email templates
+- Selected-list campaign queue with a configurable delay between each email
 
 All AI generation uses local Ollama through `OLLAMA_BASE_URL`; when Ollama is unavailable, deterministic fallback responses keep the app usable.
+
+## Marketing campaign queue
+
+1. Add approved templates in `Email Templates`.
+2. Select warm leads in `Selected-List Marketing`.
+3. Let the AI agent draft the marketing email from the selected template and audience.
+4. Review or edit the generated subject/body.
+5. Queue the selected list with a delay such as `60` seconds.
+6. Run the queue to send one email at a time through Gmail.
+
+The queue never marks emails as sent unless Composio/Gmail returns successfully. If Composio is not configured, queued sends fail visibly instead of pretending delivery.
 
 ## Production verification
 

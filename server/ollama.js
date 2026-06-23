@@ -153,6 +153,31 @@ Schema:
   return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
 }
 
+export async function generateMarketingEmailDraft({ company, products, leads, template, goal }) {
+  const topProduct = products[0]?.name || 'your solution';
+  const fallback = {
+    subject: template?.subject || `A practical next step with ${topProduct}`,
+    body: template?.body || `Hi {{firstName}},\n\nBased on your interest in {{interest}}, ${company.name} can help with a focused next step.\n\nWould you be open to a short walkthrough this week?\n\nBest,\n${company.name}`,
+    rationale: `Drafted for ${leads.length} selected lead${leads.length === 1 ? '' : 's'} using ${template?.name || 'a general'} template.`,
+    personalizationFields: ['firstName', 'companyName', 'productName', 'interest']
+  };
+
+  const prompt = `You are an AI sales agent with access to approved email templates. Return only valid JSON.
+Goal: ${goal || 'Create a concise marketing email for selected leads'}
+Company: ${company.name} - ${company.description}
+Products: ${JSON.stringify(products)}
+Selected leads: ${JSON.stringify(leads)}
+Template available to agent: ${JSON.stringify(template)}
+
+Use placeholders when useful: {{firstName}}, {{companyName}}, {{productName}}, {{interest}}.
+Keep the email truthful, concise, and suitable for human approval before queue sending.
+
+Schema:
+{"subject":"","body":"","rationale":"","personalizationFields":[""]}`;
+
+  return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
 function parseJson(raw, fallback) {
   try {
     return JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);

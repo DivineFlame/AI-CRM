@@ -181,6 +181,15 @@ export async function sendDraft(draftId) {
   return executeTool('GMAIL_SEND_DRAFT', { draft_id: draftId });
 }
 
+export async function sendEmail(to, subject, body) {
+  return executeTool('GMAIL_SEND_EMAIL', {
+    recipient_email: to,
+    to,
+    subject,
+    body
+  });
+}
+
 function normalizeList(result) {
   if (Array.isArray(result)) return result;
   if (Array.isArray(result?.items)) return result.items;

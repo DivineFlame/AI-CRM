@@ -5,6 +5,8 @@ import {
   Building2,
   Check,
   CircleAlert,
+  Clock,
+  FileText,
   Inbox,
   MailCheck,
   PackagePlus,
@@ -14,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Users,
   Wifi,
   WifiOff
 } from 'lucide-react';
@@ -30,6 +33,19 @@ function App() {
   const [gmail, setGmail] = useState('');
   const [brief, setBrief] = useState(null);
   const [campaign, setCampaign] = useState(null);
+  const [templateDraft, setTemplateDraft] = useState({
+    name: '',
+    subject: '',
+    body: '',
+    tone: 'professional'
+  });
+  const [campaignBuilder, setCampaignBuilder] = useState({
+    name: '',
+    templateId: '',
+    goal: 'Create a helpful marketing email for selected warm leads.',
+    delaySeconds: 60,
+    leadIds: []
+  });
 
   async function request(path, options = {}) {
     const response = await fetch(`${API}${path}`, {
@@ -63,6 +79,7 @@ function App() {
       { label: 'Active leads', value: leads.length },
       { label: 'Pending approvals', value: approvals.filter((item) => item.status === 'pending').length },
       { label: 'Email drafts', value: approvals.filter((item) => item.status === 'drafted').length },
+      { label: 'Queued sends', value: state?.sendQueue?.filter((item) => ['queued', 'sending'].includes(item.status)).length || 0 },
       { label: 'Avg. score', value: leads.length ? Math.round(leads.reduce((sum, lead) => sum + Number(lead.score || 0), 0) / leads.length) : 0 }
     ];
   }, [state]);
@@ -138,6 +155,27 @@ function App() {
     setNotice('Approved draft sent');
   }
 
+  async function addTemplate() {
+    if (!templateDraft.name.trim()) return;
+    setNotice('Adding email template');
+    await request('/templates', { method: 'POST', body: JSON.stringify(templateDraft) });
+    setTemplateDraft({ name: '', subject: '', body: '', tone: 'professional' });
+    await refresh();
+    setNotice('Email template added');
+  }
+
+  async function updateTemplate(id, patch) {
+    await request(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    await refresh();
+  }
+
+  async function deleteTemplate(id) {
+    setNotice('Removing email template');
+    await request(`/templates/${id}`, { method: 'DELETE' });
+    await refresh();
+    setNotice('Email template removed');
+  }
+
   async function generateBrief() {
     setNotice('Generating AI lead brief');
     setBrief(await request('/ai/brief', { method: 'POST' }));
@@ -148,6 +186,54 @@ function App() {
     setNotice('Drafting AI campaign');
     setCampaign(await request('/ai/campaign', { method: 'POST' }));
     setNotice('Campaign draft generated');
+  }
+
+  async function generateSelectedCampaign() {
+    setNotice('AI is drafting a marketing email from templates and selected leads');
+    const result = await request('/campaigns/draft', {
+      method: 'POST',
+      body: JSON.stringify(campaignBuilder)
+    });
+    setCampaign(result.campaign);
+    await refresh();
+    setNotice('Marketing campaign draft created');
+  }
+
+  async function saveCampaignDraft(patch) {
+    if (!campaign?.id) {
+      setCampaign({ ...campaign, ...patch });
+      return;
+    }
+    const saved = await request(`/campaigns/${campaign.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    setCampaign(saved);
+    await refresh();
+  }
+
+  async function queueCampaign() {
+    if (!campaign?.id) return;
+    setNotice('Adding selected campaign recipients to send queue');
+    await request(`/campaigns/${campaign.id}/queue`, {
+      method: 'POST',
+      body: JSON.stringify({ delaySeconds: campaign.delaySeconds || campaignBuilder.delaySeconds })
+    });
+    await refresh();
+    setNotice('Campaign queued for approval-based sending');
+  }
+
+  async function runQueue() {
+    setNotice('Starting send queue with delay between emails');
+    await request('/queue/run', { method: 'POST' });
+    await refresh();
+    setNotice('Send queue started');
+  }
+
+  function toggleLead(leadId) {
+    setCampaignBuilder((current) => ({
+      ...current,
+      leadIds: current.leadIds.includes(leadId)
+        ? current.leadIds.filter((id) => id !== leadId)
+        : [...current.leadIds, leadId]
+    }));
   }
 
   async function generateNextAction(leadId) {
@@ -180,6 +266,7 @@ function App() {
           <a href="#approvals"><ShieldCheck size={18} /> Approvals</a>
           <a href="#leads"><MailCheck size={18} /> Leads</a>
           <a href="#ai"><Bot size={18} /> AI</a>
+          <a href="#campaigns"><Users size={18} /> Campaigns</a>
         </nav>
         <StatusPanel state={state} />
       </aside>
@@ -345,6 +432,91 @@ function App() {
                 <span>Audience: {campaign.audience?.length || 0} lead(s)</span>
               </div>
             ) : <Empty text="Draft a nurture campaign from current leads and products." />}
+          </div>
+        </section>
+
+        <section id="campaigns" className="grid two">
+          <div className="panel">
+            <PanelTitle icon={FileText} title="Email Templates" action={<button onClick={addTemplate}><Plus size={16} /> Add</button>} />
+            <div className="form-grid">
+              <Input label="Template name" value={templateDraft.name} onChange={(name) => setTemplateDraft({ ...templateDraft, name })} />
+              <Input label="Tone" value={templateDraft.tone} onChange={(tone) => setTemplateDraft({ ...templateDraft, tone })} />
+              <Input label="Subject" value={templateDraft.subject} onChange={(subject) => setTemplateDraft({ ...templateDraft, subject })} />
+              <label className="field wide">
+                <span>Body</span>
+                <textarea value={templateDraft.body} onChange={(event) => setTemplateDraft({ ...templateDraft, body: event.target.value })} />
+              </label>
+            </div>
+            <div className="template-list">
+              {state.templates.map((template) => (
+                <article className="template-card" key={template.id}>
+                  <div className="approval-head">
+                    <div>
+                      <strong>{template.name}</strong>
+                      <span>{template.tone} · {template.subject}</span>
+                    </div>
+                    <button className="icon danger" title="Remove template" onClick={() => deleteTemplate(template.id)}><Trash2 size={16} /></button>
+                  </div>
+                  <textarea value={template.body} onChange={(event) => updateTemplate(template.id, { body: event.target.value })} />
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <PanelTitle icon={Users} title="Selected-List Marketing" action={<button onClick={generateSelectedCampaign}><Sparkles size={16} /> AI Draft</button>} />
+            <div className="form-grid">
+              <Input label="Campaign name" value={campaignBuilder.name} onChange={(name) => setCampaignBuilder({ ...campaignBuilder, name })} />
+              <label className="field">
+                <span>Template</span>
+                <select value={campaignBuilder.templateId || state.templates[0]?.id || ''} onChange={(event) => setCampaignBuilder({ ...campaignBuilder, templateId: event.target.value })}>
+                  {state.templates.map((template) => <option value={template.id} key={template.id}>{template.name}</option>)}
+                </select>
+              </label>
+              <Input label="Delay between emails, seconds" value={String(campaignBuilder.delaySeconds)} onChange={(delaySeconds) => setCampaignBuilder({ ...campaignBuilder, delaySeconds })} />
+              <label className="field wide">
+                <span>AI goal</span>
+                <textarea value={campaignBuilder.goal} onChange={(event) => setCampaignBuilder({ ...campaignBuilder, goal: event.target.value })} />
+              </label>
+            </div>
+            <div className="recipient-list">
+              {state.leads.map((lead) => (
+                <label className="recipient-row" key={lead.id}>
+                  <input type="checkbox" checked={campaignBuilder.leadIds.includes(lead.id)} onChange={() => toggleLead(lead.id)} />
+                  <span><strong>{lead.contactName || lead.companyName}</strong><small>{lead.email} · {lead.interest}</small></span>
+                </label>
+              ))}
+              {!state.leads.length && <Empty text="Create leads from Gmail before selecting a campaign audience." />}
+            </div>
+          </div>
+        </section>
+
+        <section className="panel">
+          <PanelTitle icon={Clock} title="Campaign Queue" action={<button className="primary" onClick={runQueue}><Send size={16} /> Run Queue</button>} />
+          {campaign && (
+            <div className="campaign-editor">
+              <Input label="Subject" value={campaign.subject || ''} onChange={(subject) => saveCampaignDraft({ subject })} />
+              <label className="field">
+                <span>Approved marketing email</span>
+                <textarea value={campaign.body || ''} onChange={(event) => saveCampaignDraft({ body: event.target.value })} />
+              </label>
+              <div className="actions">
+                <span className="status-pill">{campaign.status || 'draft'}</span>
+                <button onClick={queueCampaign}><Clock size={16} /> Queue Selected List</button>
+              </div>
+            </div>
+          )}
+          <div className="queue-list">
+            {state.sendQueue.map((item) => (
+              <article className="queue-row" key={item.id}>
+                <div>
+                  <strong>{item.subject}</strong>
+                  <span>{item.to} · wait {item.delaySeconds}s</span>
+                </div>
+                <span className={`status ${item.status}`}>{item.status}</span>
+              </article>
+            ))}
+            {!state.sendQueue.length && <Empty text="Queue a campaign to send one email at a time with a delay." />}
           </div>
         </section>
       </section>

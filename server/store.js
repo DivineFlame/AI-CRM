@@ -29,6 +29,26 @@ const seed = {
     message: ''
   },
   approvals: [],
+  templates: [
+    {
+      id: 'tpl_intro',
+      name: 'Intro Outreach',
+      subject: 'A practical next step with {{productName}}',
+      body: 'Hi {{firstName}},\n\nBased on your interest in {{productName}}, {{companyName}} can help your team move faster while keeping outreach under human approval.\n\nWould a short walkthrough be useful this week?\n\nBest,\n{{companyName}}',
+      tone: 'consultative',
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'tpl_follow_up',
+      name: 'Warm Follow-up',
+      subject: 'Following up on {{interest}}',
+      body: 'Hi {{firstName}},\n\nI wanted to follow up on your interest in {{interest}}. {{companyName}} can help with a focused workflow for lead qualification, email drafting, and approval-based sending.\n\nIs there a good time to compare notes this week?\n\nBest,\n{{companyName}}',
+      tone: 'warm',
+      createdAt: new Date().toISOString()
+    }
+  ],
+  campaigns: [],
+  sendQueue: [],
   leads: [],
   emails: []
 };
@@ -68,6 +88,9 @@ function mergeState(saved) {
     gmail: { ...seed.gmail, ...(saved.gmail || {}) },
     products: Array.isArray(saved.products) ? saved.products : seed.products,
     approvals: Array.isArray(saved.approvals) ? saved.approvals : seed.approvals,
+    templates: Array.isArray(saved.templates) ? saved.templates : seed.templates,
+    campaigns: Array.isArray(saved.campaigns) ? saved.campaigns : seed.campaigns,
+    sendQueue: Array.isArray(saved.sendQueue) ? saved.sendQueue : seed.sendQueue,
     leads: Array.isArray(saved.leads) ? saved.leads : seed.leads,
     emails: Array.isArray(saved.emails) ? saved.emails : seed.emails
   };
