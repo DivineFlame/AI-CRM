@@ -16,8 +16,12 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-http://38.247.188.228}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://38.247.188.228}
       HOST: ${HOST:-0.0.0.0}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
+      PAPERCLIP_BASE_URL: ${PAPERCLIP_BASE_URL:-http://host.docker.internal:3100}
+      PAPERCLIP_COMPANY_ID: ${PAPERCLIP_COMPANY_ID:-}
+      PAPERCLIP_AGENT_ID: ${PAPERCLIP_AGENT_ID:-}
+      PAPERCLIP_API_KEY: ${PAPERCLIP_API_KEY:-}
+      PAPERCLIP_TIMEOUT_MS: ${PAPERCLIP_TIMEOUT_MS:-120000}
+      PAPERCLIP_POLL_INTERVAL_MS: ${PAPERCLIP_POLL_INTERVAL_MS:-1500}
     volumes:
       - ai-crm-data:/app/server/data
     extra_hosts:

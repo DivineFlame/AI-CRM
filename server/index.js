@@ -16,9 +16,9 @@ import {
   generateLeadBrief,
   generateMarketingEmailDraft,
   generateNextBestAction,
-  getOllamaStatus,
+  getPaperclipStatus,
   summarizeWebsiteForEmail
-} from './ollama.js';
+} from './paperclip.js';
 import {
   createGmailConnection,
   fetchRecentEmails,
@@ -51,25 +51,29 @@ app.use(rateLimit({
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', async (req, res) => {
-  const ollama = await getOllamaStatus();
+  const paperclip = await getPaperclipStatus();
   res.json({
     ok: true,
     service: 'ai-crm',
     composioConfigured: Boolean(process.env.COMPOSIO_API_KEY),
-    ollama
+    paperclip
   });
 });
 
+app.get('/api/paperclip/status', async (req, res) => {
+  res.json(await getPaperclipStatus());
+});
+
 app.get('/api/state', async (req, res) => {
-  const [state, ollama, composio] = await Promise.all([
+  const [state, paperclip, composio] = await Promise.all([
     loadState(),
-    getOllamaStatus(),
+    getPaperclipStatus(),
     getGmailConfigurationStatus()
   ]);
   res.json({
     ...state,
     system: {
-      ollama,
+      paperclip,
       composioConfigured: composio.configured,
       composio
     }
