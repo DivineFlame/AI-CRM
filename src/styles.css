@@ -321,6 +321,12 @@ input:focus, textarea:focus, select:focus {
   gap: 12px;
   align-items: center;
 }
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
 .status.pending { color: var(--amber); background: #fff4dd; }
 .status.drafted { color: var(--blue); background: var(--soft-blue); }
 .status.sent { color: var(--green); background: var(--soft-green); }

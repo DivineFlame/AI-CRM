@@ -181,6 +181,13 @@ function App() {
     setNotice('Approved email sent');
   }
 
+  async function deleteApproval(id) {
+    setNotice('Deleting approval item');
+    await request(`/approvals/${id}`, { method: 'DELETE' });
+    await refresh();
+    setNotice('Approval item deleted');
+  }
+
   async function addTemplate() {
     if (!templateDraft.name.trim()) return;
     setNotice('Adding email template');
@@ -270,6 +277,13 @@ function App() {
       leads: current.leads.map((lead) => (lead.id === leadId ? { ...lead, aiNextAction: nextAction } : lead))
     }));
     setNotice('Next best action generated');
+  }
+
+  async function deleteEmailLead(leadId) {
+    setNotice('Deleting email lead and related approvals');
+    await request(`/leads/${leadId}`, { method: 'DELETE' });
+    await refresh();
+    setNotice('Email lead deleted');
   }
 
   async function generateBuyerLeadList() {
@@ -480,7 +494,10 @@ function App() {
                     <strong>{approval.subject}</strong>
                     <span>To {approval.to}</span>
                   </div>
-                  <span className={`status ${approval.status}`}>{approval.status}</span>
+                  <div className="row-actions">
+                    <span className={`status ${approval.status}`}>{approval.status}</span>
+                    <button className="icon danger" title="Delete approval" onClick={() => deleteApproval(approval.id)}><Trash2 size={16} /></button>
+                  </div>
                 </div>
                 <textarea value={approval.body} onChange={(event) => updateApproval(approval.id, event.target.value)} />
                 <div className="actions">
@@ -505,7 +522,10 @@ function App() {
                 <span>
                   {lead.aiNextAction?.action || lead.nextAction}
                   {lead.aiNextAction?.rationale && <small>{lead.aiNextAction.rationale}</small>}
-                  <button className="small-action" onClick={() => generateNextAction(lead.id)}><Sparkles size={14} /> AI action</button>
+                  <div className="row-actions">
+                    <button className="small-action" onClick={() => generateNextAction(lead.id)}><Sparkles size={14} /> AI action</button>
+                    <button className="small-action danger" onClick={() => deleteEmailLead(lead.id)}><Trash2 size={14} /> Delete</button>
+                  </div>
                 </span>
               </div>
             ))}
@@ -539,6 +559,7 @@ function App() {
                   <span>
                     <strong>{lead.companyName}</strong>
                     <small>{lead.address} · {lead.email}</small>
+                    {lead.website && <small>{lead.website}</small>}
                     <small>{lead.fitReason}</small>
                   </span>
                 </label>

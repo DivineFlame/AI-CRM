@@ -26,7 +26,7 @@ import {
   sendEmail
 } from './composio.js';
 import { createId, loadState, updateState } from './store.js';
-import { gatherWebsiteData } from './website.js';
+import { gatherWebsiteData, searchBuyerCompanies } from './website.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -284,12 +284,23 @@ app.post('/api/campaigns/draft', async (req, res) => {
 
 app.post('/api/buyer-leads/generate', async (req, res) => {
   const state = await loadState();
-  const result = await generateBuyerLeads({
+  const webSearch = await searchBuyerCompanies({
     company: state.company,
     products: state.products,
     count: req.body.count || 8,
     region: req.body.region,
     buyerType: req.body.buyerType
+  });
+  if (!webSearch.candidates.length) {
+    return res.status(502).json({ error: 'No buyer leads found from web search. Try a broader buyer type or region.' });
+  }
+  const result = await generateBuyerLeads({
+    company: state.company,
+    products: state.products,
+    count: req.body.count || 8,
+    region: req.body.region,
+    buyerType: req.body.buyerType,
+    webCandidates: webSearch.candidates
   });
 
   const buyerLeads = (result.leads || []).slice(0, 25).map((lead) => ({
@@ -297,11 +308,13 @@ app.post('/api/buyer-leads/generate', async (req, res) => {
     companyName: lead.companyName || 'Unnamed Buyer',
     address: lead.address || '',
     email: lead.email || '',
+    website: lead.website || '',
     fitReason: lead.fitReason || '',
     interest: lead.interest || state.products[0]?.name || 'General fit',
     score: Number(lead.score || 60),
-    source: 'ai_generated',
-    verificationStatus: 'unverified',
+    source: 'web_ai_generated',
+    verificationStatus: lead.verificationStatus || 'unverified',
+    searchQuery: webSearch.query,
     stage: 'Prospect',
     createdAt: new Date().toISOString()
   }));
@@ -466,6 +479,16 @@ app.post('/api/leads/:id/next-action', async (req, res) => {
   res.json(await generateNextBestAction(lead, state.company, state.products));
 });
 
+app.delete('/api/leads/:id', async (req, res) => {
+  await updateState((state) => ({
+    ...state,
+    leads: state.leads.filter((lead) => lead.id !== req.params.id),
+    approvals: state.approvals.filter((approval) => approval.leadId !== req.params.id),
+    sendQueue: state.sendQueue.filter((item) => item.leadId !== req.params.id)
+  }));
+  res.status(204).end();
+});
+
 app.patch('/api/approvals/:id', async (req, res) => {
   const next = await updateState((state) => ({
     ...state,
@@ -474,6 +497,14 @@ app.patch('/api/approvals/:id', async (req, res) => {
     )
   }));
   res.json(next.approvals.find((approval) => approval.id === req.params.id));
+});
+
+app.delete('/api/approvals/:id', async (req, res) => {
+  await updateState((state) => ({
+    ...state,
+    approvals: state.approvals.filter((approval) => approval.id !== req.params.id)
+  }));
+  res.status(204).end();
 });
 
 app.post('/api/approvals/:id/send', async (req, res) => {

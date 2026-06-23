@@ -192,21 +192,24 @@ Schema:
   return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
 }
 
-export async function generateBuyerLeads({ company, products, count = 8, region = '', buyerType = '' }) {
+export async function generateBuyerLeads({ company, products, count = 8, region = '', buyerType = '', webCandidates = [] }) {
   const topProduct = products[0]?.name || 'your solution';
   const fallback = {
-    leads: Array.from({ length: Math.min(Number(count) || 8, 12) }, (_, index) => ({
-      companyName: `${company.industry || 'Growth'} Buyer ${index + 1}`,
-      address: region ? `${region}` : 'Target market address to verify',
-      email: `buyers${index + 1}@example.com`,
-      fitReason: `Likely fit for ${topProduct} based on ${company.targetAudience || 'the target audience'}.`,
+    leads: webCandidates.slice(0, Math.min(Number(count) || 8, 25)).map((candidate) => ({
+      companyName: candidate.companyName,
+      address: candidate.address || region || 'Address not found on public page',
+      email: candidate.email,
+      website: candidate.website || candidate.sourceUrl,
+      fitReason: `Web result appears relevant for ${topProduct}. ${candidate.snippet || candidate.siteSummary || ''}`.trim(),
       interest: topProduct,
-      score: 65 + Math.min(index * 2, 20)
+      score: candidate.emailFoundOnPage ? 78 : 62,
+      verificationStatus: candidate.emailFoundOnPage ? 'web_email_found' : 'domain_email_suggested'
     }))
   };
 
-  const prompt = `Return only valid JSON. Generate AI-suggested B2B buyer prospect leads for this company profile.
-These are prospecting suggestions and must be treated as unverified until checked by the user.
+  const prompt = `Return only valid JSON. Convert these real web search candidates into buyer prospect leads.
+Do not invent companies. Use only companies from webCandidates. You may clean company names and summarize fit.
+Emails are unverified unless webCandidates.emailFoundOnPage is true.
 
 Company: ${JSON.stringify(company)}
 Products: ${JSON.stringify(products)}
@@ -214,12 +217,13 @@ Website intelligence: ${formatWebsiteContext(company)}
 Preferred buyer type: ${buyerType || company.targetAudience || 'best-fit buyers'}
 Preferred region/address area: ${region || company.address || 'any relevant market'}
 Number of buyer leads: ${Math.min(Number(count) || 8, 25)}
+webCandidates: ${JSON.stringify(webCandidates)}
 
 Each lead must include company name, address, and email id format.
-Use realistic business formatting, but do not claim verification.
+Do not output placeholder companies.
 
 Schema:
-{"leads":[{"companyName":"","address":"","email":"","fitReason":"","interest":"","score":0}]}`;
+{"leads":[{"companyName":"","address":"","email":"","website":"","fitReason":"","interest":"","score":0,"verificationStatus":"web_email_found|domain_email_suggested|unverified"}]}`;
 
   return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
 }
