@@ -164,23 +164,6 @@ export async function fetchRecentEmails() {
   }
 }
 
-export async function createDraft(to, subject, body, threadId) {
-  try {
-    return executeTool('GMAIL_CREATE_EMAIL_DRAFT', {
-      recipient_email: to,
-      subject,
-      body,
-      thread_id: threadId
-    });
-  } catch (error) {
-    return { mocked: true, id: `draft_${Date.now()}`, error: error.message };
-  }
-}
-
-export async function sendDraft(draftId) {
-  return executeTool('GMAIL_SEND_DRAFT', { draft_id: draftId });
-}
-
 export async function sendEmail(to, subject, body) {
   return executeTool('GMAIL_SEND_EMAIL', {
     recipient_email: to,

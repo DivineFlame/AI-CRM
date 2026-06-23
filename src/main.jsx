@@ -89,7 +89,7 @@ function App() {
       { label: 'Active leads', value: leads.length },
       { label: 'Buyer leads', value: state?.buyerLeads?.length || 0 },
       { label: 'Pending approvals', value: approvals.filter((item) => item.status === 'pending').length },
-      { label: 'Email drafts', value: approvals.filter((item) => item.status === 'drafted').length },
+      { label: 'Approved sent', value: approvals.filter((item) => item.status === 'sent').length },
       { label: 'Queued sends', value: state?.sendQueue?.filter((item) => ['queued', 'sending'].includes(item.status)).length || 0 },
       { label: 'Avg. score', value: leads.length ? Math.round(leads.reduce((sum, lead) => sum + Number(lead.score || 0), 0) / leads.length) : 0 }
     ];
@@ -174,18 +174,11 @@ function App() {
     await refresh();
   }
 
-  async function createGmailDraft(id) {
-    setNotice('Creating Gmail draft');
-    await request(`/approvals/${id}/create-draft`, { method: 'POST' });
-    await refresh();
-    setNotice('Draft created in Gmail or local fallback');
-  }
-
   async function sendApproved(id) {
-    setNotice('Sending approved Gmail draft');
+    setNotice('Sending approved email through Gmail');
     await request(`/approvals/${id}/send`, { method: 'POST' });
     await refresh();
-    setNotice('Approved draft sent');
+    setNotice('Approved email sent');
   }
 
   async function addTemplate() {
@@ -491,8 +484,7 @@ function App() {
                 </div>
                 <textarea value={approval.body} onChange={(event) => updateApproval(approval.id, event.target.value)} />
                 <div className="actions">
-                  <button onClick={() => createGmailDraft(approval.id)}><MailCheck size={16} /> Draft</button>
-                  <button className="primary" disabled={approval.status === 'sent'} onClick={() => sendApproved(approval.id)}><Send size={16} /> Send Approved</button>
+                  <button className="primary" disabled={approval.status === 'sent'} onClick={() => sendApproved(approval.id)}><Send size={16} /> Send Email</button>
                 </div>
               </article>
             ))}

@@ -20,12 +20,10 @@ import {
   summarizeWebsiteForEmail
 } from './ollama.js';
 import {
-  createDraft,
   createGmailConnection,
   fetchRecentEmails,
   getGmailConfigurationStatus,
-  sendEmail,
-  sendDraft
+  sendEmail
 } from './composio.js';
 import { createId, loadState, updateState } from './store.js';
 import { gatherWebsiteData } from './website.js';
@@ -228,7 +226,6 @@ app.post('/api/email/analyze', async (req, res) => {
       subject: `Re: ${email.subject}`,
       body,
       status: 'pending',
-      draftProviderId: '',
       createdAt: new Date().toISOString()
     };
     created.push({ lead, approval });
@@ -479,31 +476,12 @@ app.patch('/api/approvals/:id', async (req, res) => {
   res.json(next.approvals.find((approval) => approval.id === req.params.id));
 });
 
-app.post('/api/approvals/:id/create-draft', async (req, res) => {
-  const state = await loadState();
-  const approval = state.approvals.find((item) => item.id === req.params.id);
-  if (!approval) return res.status(404).json({ error: 'Approval not found' });
-  const email = state.emails.find((item) => item.id === approval.emailId);
-  const draft = await createDraft(approval.to, approval.subject, approval.body, email?.threadId);
-
-  await updateState((current) => ({
-    ...current,
-    approvals: current.approvals.map((item) =>
-      item.id === approval.id
-        ? { ...item, draftProviderId: draft.id || draft.draft_id || 'local-draft', status: 'drafted' }
-        : item
-    )
-  }));
-  res.json(draft);
-});
-
 app.post('/api/approvals/:id/send', async (req, res) => {
   const state = await loadState();
   const approval = state.approvals.find((item) => item.id === req.params.id);
   if (!approval) return res.status(404).json({ error: 'Approval not found' });
-  if (!approval.draftProviderId) return res.status(400).json({ error: 'Create a Gmail draft before sending' });
 
-  const result = await sendDraft(approval.draftProviderId);
+  const result = await sendEmail(approval.to, approval.subject, approval.body);
   await updateState((current) => ({
     ...current,
     approvals: current.approvals.map((item) =>
