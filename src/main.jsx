@@ -28,6 +28,7 @@ function App() {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState('Loading workspace');
   const [notice, setNotice] = useState('');
+  const [activePanel, setActivePanel] = useState(0);
   const [companyDraft, setCompanyDraft] = useState({});
   const [productDraft, setProductDraft] = useState({ name: '', category: '', price: '', description: '' });
   const [gmail, setGmail] = useState('');
@@ -84,11 +85,32 @@ function App() {
     ];
   }, [state]);
 
+  const panelDefs = [
+    { id: 'setup', label: 'Setup' },
+    { id: 'products', label: 'Products' },
+    { id: 'mail', label: 'Inbox' },
+    { id: 'approvals', label: 'Approvals' },
+    { id: 'leads', label: 'Leads' },
+    { id: 'ai', label: 'AI' },
+    { id: 'campaigns', label: 'Campaigns' },
+    { id: 'queue', label: 'Queue' }
+  ];
+
   async function saveCompany() {
     setNotice('Saving company profile');
     await request('/company', { method: 'PUT', body: JSON.stringify(companyDraft) });
     await refresh();
     setNotice('Company profile saved');
+  }
+
+  async function gatherWebsiteInfo() {
+    setNotice('Gathering company website intelligence for email communication');
+    const insights = await request('/company/gather-website', {
+      method: 'POST',
+      body: JSON.stringify({ website: companyDraft.website })
+    });
+    await refresh();
+    setNotice(`Website intelligence updated: ${insights.title || insights.sourceUrl}`);
   }
 
   async function addProduct() {
@@ -291,18 +313,59 @@ function App() {
           ))}
         </section>
 
-        <section id="setup" className="grid two">
+        <section className="panel-switcher">
+          <div className="switcher-head">
+            <strong>{panelDefs[activePanel].label}</strong>
+            <span>{activePanel + 1} / {panelDefs.length}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max={panelDefs.length - 1}
+            value={activePanel}
+            onChange={(event) => setActivePanel(Number(event.target.value))}
+          />
+          <div className="panel-tabs">
+            {panelDefs.map((panel, index) => (
+              <button
+                className={index === activePanel ? 'active-tab' : ''}
+                key={panel.id}
+                onClick={() => setActivePanel(index)}
+              >
+                {panel.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section id="setup" className={`data-slide grid two ${activePanel === 0 ? 'active' : ''}`}>
           <div className="panel">
-            <PanelTitle icon={Building2} title="Company Profile" action={<button onClick={saveCompany}><Check size={16} /> Save</button>} />
+            <PanelTitle icon={Building2} title="Company Profile" action={<div className="button-row"><button onClick={gatherWebsiteInfo}><Sparkles size={16} /> Gather Website</button><button onClick={saveCompany}><Check size={16} /> Save</button></div>} />
             <div className="form-grid">
               <Input label="Company name" value={companyDraft.name} onChange={(name) => setCompanyDraft({ ...companyDraft, name })} />
               <Input label="Website" value={companyDraft.website} onChange={(website) => setCompanyDraft({ ...companyDraft, website })} />
               <Input label="Industry" value={companyDraft.industry} onChange={(industry) => setCompanyDraft({ ...companyDraft, industry })} />
+              <Input label="Email" value={companyDraft.email} onChange={(email) => setCompanyDraft({ ...companyDraft, email })} />
+              <Input label="Phone" value={companyDraft.phone} onChange={(phone) => setCompanyDraft({ ...companyDraft, phone })} />
+              <Input label="Address" value={companyDraft.address} onChange={(address) => setCompanyDraft({ ...companyDraft, address })} />
+              <Input label="Target audience" value={companyDraft.targetAudience} onChange={(targetAudience) => setCompanyDraft({ ...companyDraft, targetAudience })} />
+              <Input label="Email tone" value={companyDraft.tone} onChange={(tone) => setCompanyDraft({ ...companyDraft, tone })} />
               <label className="field wide">
                 <span>Description</span>
                 <textarea value={companyDraft.description || ''} onChange={(event) => setCompanyDraft({ ...companyDraft, description: event.target.value })} />
               </label>
+              <label className="field wide">
+                <span>Value proposition</span>
+                <textarea value={companyDraft.valueProposition || ''} onChange={(event) => setCompanyDraft({ ...companyDraft, valueProposition: event.target.value })} />
+              </label>
             </div>
+            {state.company.websiteInsights?.summary && (
+              <div className="insight-box">
+                <strong>{state.company.websiteInsights.title || 'Website intelligence'}</strong>
+                <p>{state.company.websiteInsights.summary}</p>
+                <span>{state.company.websiteInsights.keyMessages?.slice(0, 3).join(' · ')}</span>
+              </div>
+            )}
           </div>
 
           <div className="panel">
@@ -325,7 +388,7 @@ function App() {
           </div>
         </section>
 
-        <section className="panel">
+        <section id="products" className={`data-slide panel ${activePanel === 1 ? 'active' : ''}`}>
           <PanelTitle icon={PackagePlus} title="Products" action={<button onClick={addProduct}><Plus size={16} /> Add</button>} />
           <div className="product-form">
             <Input label="Product" value={productDraft.name} onChange={(name) => setProductDraft({ ...productDraft, name })} />
@@ -347,7 +410,7 @@ function App() {
           </div>
         </section>
 
-        <section id="mail" className="panel">
+        <section id="mail" className={`data-slide panel ${activePanel === 2 ? 'active' : ''}`}>
           <PanelTitle icon={Inbox} title="Recent Gmail Communication" action={<button onClick={syncEmail}><RefreshCw size={16} /> Sync</button>} />
           <div className="email-list">
             {state.emails.map((email) => (
@@ -364,7 +427,7 @@ function App() {
           </div>
         </section>
 
-        <section id="approvals" className="panel">
+        <section id="approvals" className={`data-slide panel ${activePanel === 3 ? 'active' : ''}`}>
           <PanelTitle icon={ShieldCheck} title="Human Approval Queue" />
           <div className="approval-grid">
             {state.approvals.map((approval) => (
@@ -387,7 +450,7 @@ function App() {
           </div>
         </section>
 
-        <section id="leads" className="panel">
+        <section id="leads" className={`data-slide panel ${activePanel === 4 ? 'active' : ''}`}>
           <PanelTitle icon={MailCheck} title="Lead Module" />
           <div className="lead-table">
             <div className="table-head"><span>Lead</span><span>Interest</span><span>Stage</span><span>Score</span><span>Next action</span></div>
@@ -408,7 +471,7 @@ function App() {
           {!state.leads.length && <Empty text="Qualified leads will appear after inbox analysis." />}
         </section>
 
-        <section id="ai" className="grid two">
+        <section id="ai" className={`data-slide grid two ${activePanel === 5 ? 'active' : ''}`}>
           <div className="panel">
             <PanelTitle icon={Bot} title="AI Sales Brief" action={<button onClick={generateBrief}><Sparkles size={16} /> Generate</button>} />
             {brief ? (
@@ -435,7 +498,7 @@ function App() {
           </div>
         </section>
 
-        <section id="campaigns" className="grid two">
+        <section id="campaigns" className={`data-slide grid two ${activePanel === 6 ? 'active' : ''}`}>
           <div className="panel">
             <PanelTitle icon={FileText} title="Email Templates" action={<button onClick={addTemplate}><Plus size={16} /> Add</button>} />
             <div className="form-grid">
@@ -491,7 +554,7 @@ function App() {
           </div>
         </section>
 
-        <section className="panel">
+        <section id="queue" className={`data-slide panel ${activePanel === 7 ? 'active' : ''}`}>
           <PanelTitle icon={Clock} title="Campaign Queue" action={<button className="primary" onClick={runQueue}><Send size={16} /> Run Queue</button>} />
           {campaign && (
             <div className="campaign-editor">

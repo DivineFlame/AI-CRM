@@ -9,7 +9,21 @@ const seed = {
     name: 'Acme Growth Systems',
     website: 'https://example.com',
     industry: 'B2B SaaS',
-    description: 'AI-enabled CRM and sales automation for growing teams.'
+    email: '',
+    phone: '',
+    address: '',
+    targetAudience: 'Growing sales teams',
+    valueProposition: 'Approval-first AI email automation for CRM workflows.',
+    tone: 'professional and consultative',
+    description: 'AI-enabled CRM and sales automation for growing teams.',
+    websiteInsights: {
+      sourceUrl: '',
+      title: '',
+      summary: '',
+      keyMessages: [],
+      suggestedAngles: [],
+      updatedAt: null
+    }
   },
   products: [
     {

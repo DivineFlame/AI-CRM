@@ -44,6 +44,7 @@ export async function generateWithOllama(prompt, fallback) {
 
 export async function analyzeEmailForLead(email, company, products) {
   const productList = products.map((product) => `${product.name}: ${product.description}`).join('\n');
+  const websiteContext = formatWebsiteContext(company);
   const fallback = JSON.stringify({
     companyName: email.fromName || email.from?.split('@')[1] || 'Unknown',
     contactName: email.fromName || email.from,
@@ -58,6 +59,10 @@ export async function analyzeEmailForLead(email, company, products) {
   const prompt = `You are a CRM lead analyst. Return only valid JSON.
 Company profile:
 ${company.name} - ${company.description}
+Target audience: ${company.targetAudience || ''}
+Value proposition: ${company.valueProposition || ''}
+Website context:
+${websiteContext}
 
 Products:
 ${productList}
@@ -84,6 +89,10 @@ export async function draftEmailReply(email, lead, company) {
 
 Company: ${company.name}
 Company description: ${company.description}
+Company value proposition: ${company.valueProposition || ''}
+Preferred tone: ${company.tone || 'professional'}
+Website intelligence for email context:
+${formatWebsiteContext(company)}
 Lead: ${JSON.stringify(lead)}
 Original email subject: ${email.subject}
 Original email body: ${email.body}`;
@@ -144,6 +153,7 @@ export async function generateCampaignDraft(company, products, leads) {
 
   const prompt = `Return only valid JSON for a small sales nurture campaign.
 Company: ${company.name} - ${company.description}
+Website intelligence: ${formatWebsiteContext(company)}
 Products: ${JSON.stringify(products)}
 Leads: ${JSON.stringify(leads)}
 
@@ -165,6 +175,10 @@ export async function generateMarketingEmailDraft({ company, products, leads, te
   const prompt = `You are an AI sales agent with access to approved email templates. Return only valid JSON.
 Goal: ${goal || 'Create a concise marketing email for selected leads'}
 Company: ${company.name} - ${company.description}
+Target audience: ${company.targetAudience || ''}
+Value proposition: ${company.valueProposition || ''}
+Preferred tone: ${company.tone || 'professional'}
+Website intelligence for messaging: ${formatWebsiteContext(company)}
 Products: ${JSON.stringify(products)}
 Selected leads: ${JSON.stringify(leads)}
 Template available to agent: ${JSON.stringify(template)}
@@ -176,6 +190,44 @@ Schema:
 {"subject":"","body":"","rationale":"","personalizationFields":[""]}`;
 
   return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
+export async function summarizeWebsiteForEmail({ company, websiteData }) {
+  const fallback = {
+    sourceUrl: websiteData.url,
+    title: websiteData.title,
+    summary: websiteData.description || websiteData.text.slice(0, 500),
+    keyMessages: websiteData.headings.slice(0, 6),
+    suggestedAngles: [
+      company.valueProposition || 'Lead with the company value proposition.',
+      'Use concise, relevant proof points from the website.'
+    ],
+    updatedAt: new Date().toISOString()
+  };
+
+  const prompt = `Return only valid JSON. Summarize this company website for CRM email communication.
+Company profile: ${JSON.stringify(company)}
+Website URL: ${websiteData.url}
+Title: ${websiteData.title}
+Meta description: ${websiteData.description}
+Headings: ${JSON.stringify(websiteData.headings)}
+Visible text: ${websiteData.text.slice(0, 8000)}
+
+Schema:
+{"sourceUrl":"","title":"","summary":"","keyMessages":[""],"suggestedAngles":[""],"updatedAt":""}`;
+
+  return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
+function formatWebsiteContext(company) {
+  const insights = company.websiteInsights || {};
+  const messages = Array.isArray(insights.keyMessages) ? insights.keyMessages.join('; ') : '';
+  const angles = Array.isArray(insights.suggestedAngles) ? insights.suggestedAngles.join('; ') : '';
+  return [
+    insights.summary,
+    messages ? `Key messages: ${messages}` : '',
+    angles ? `Suggested email angles: ${angles}` : ''
+  ].filter(Boolean).join('\n') || 'No website intelligence gathered yet.';
 }
 
 function parseJson(raw, fallback) {

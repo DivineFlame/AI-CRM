@@ -14,7 +14,8 @@ import {
   generateLeadBrief,
   generateMarketingEmailDraft,
   generateNextBestAction,
-  getOllamaStatus
+  getOllamaStatus,
+  summarizeWebsiteForEmail
 } from './ollama.js';
 import {
   createDraft,
@@ -25,6 +26,7 @@ import {
   sendDraft
 } from './composio.js';
 import { createId, loadState, updateState } from './store.js';
+import { gatherWebsiteData } from './website.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -82,6 +84,32 @@ app.put('/api/company', async (req, res) => {
     company: { ...current.company, ...req.body }
   }));
   res.json(state.company);
+});
+
+app.post('/api/company/gather-website', async (req, res) => {
+  const state = await loadState();
+  const website = req.body.website || state.company.website;
+  const websiteData = await gatherWebsiteData(website);
+  const insights = await summarizeWebsiteForEmail({
+    company: { ...state.company, website },
+    websiteData
+  });
+
+  const next = await updateState((current) => ({
+    ...current,
+    company: {
+      ...current.company,
+      website,
+      websiteInsights: {
+        ...insights,
+        sourceUrl: insights.sourceUrl || websiteData.url,
+        title: insights.title || websiteData.title,
+        updatedAt: insights.updatedAt || new Date().toISOString()
+      }
+    }
+  }));
+
+  res.json(next.company.websiteInsights);
 });
 
 app.post('/api/products', async (req, res) => {
