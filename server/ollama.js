@@ -192,6 +192,61 @@ Schema:
   return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
 }
 
+export async function generateBuyerLeads({ company, products, count = 8, region = '', buyerType = '' }) {
+  const topProduct = products[0]?.name || 'your solution';
+  const fallback = {
+    leads: Array.from({ length: Math.min(Number(count) || 8, 12) }, (_, index) => ({
+      companyName: `${company.industry || 'Growth'} Buyer ${index + 1}`,
+      address: region ? `${region}` : 'Target market address to verify',
+      email: `buyers${index + 1}@example.com`,
+      fitReason: `Likely fit for ${topProduct} based on ${company.targetAudience || 'the target audience'}.`,
+      interest: topProduct,
+      score: 65 + Math.min(index * 2, 20)
+    }))
+  };
+
+  const prompt = `Return only valid JSON. Generate AI-suggested B2B buyer prospect leads for this company profile.
+These are prospecting suggestions and must be treated as unverified until checked by the user.
+
+Company: ${JSON.stringify(company)}
+Products: ${JSON.stringify(products)}
+Website intelligence: ${formatWebsiteContext(company)}
+Preferred buyer type: ${buyerType || company.targetAudience || 'best-fit buyers'}
+Preferred region/address area: ${region || company.address || 'any relevant market'}
+Number of buyer leads: ${Math.min(Number(count) || 8, 25)}
+
+Each lead must include company name, address, and email id format.
+Use realistic business formatting, but do not claim verification.
+
+Schema:
+{"leads":[{"companyName":"","address":"","email":"","fitReason":"","interest":"","score":0}]}`;
+
+  return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
+export async function generateBuyerIntroEmail({ company, products, buyerLead, template, goal }) {
+  const topProduct = products[0]?.name || buyerLead.interest || 'our solution';
+  const fallback = {
+    subject: `Intro: ${company.name} for ${buyerLead.companyName}`,
+    body: `Hi there,\n\nI am reaching out from ${company.name}. Based on your company profile, ${topProduct} may be relevant for improving sales communication and lead follow-up while keeping email sends approval-based.\n\nWould you be open to a short introduction this week?\n\nBest,\n${company.name}`
+  };
+
+  const prompt = `Return only valid JSON. Draft a concise introductory B2B email for an AI-generated buyer prospect.
+Do not mention private data or claim that the buyer requested contact.
+
+Company: ${JSON.stringify(company)}
+Products: ${JSON.stringify(products)}
+Website intelligence: ${formatWebsiteContext(company)}
+Buyer lead: ${JSON.stringify(buyerLead)}
+Approved template: ${JSON.stringify(template)}
+Goal: ${goal || 'Introduce the company and ask for a short call'}
+
+Schema:
+{"subject":"","body":""}`;
+
+  return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
 export async function summarizeWebsiteForEmail({ company, websiteData }) {
   const fallback = {
     sourceUrl: websiteData.url,

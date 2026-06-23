@@ -47,6 +47,15 @@ function App() {
     delaySeconds: 60,
     leadIds: []
   });
+  const [buyerGenerator, setBuyerGenerator] = useState({
+    count: 8,
+    region: '',
+    buyerType: '',
+    goal: 'Send a concise intro email to relevant buyer companies.',
+    delaySeconds: 60,
+    templateId: ''
+  });
+  const [selectedBuyerLeadIds, setSelectedBuyerLeadIds] = useState([]);
 
   async function request(path, options = {}) {
     const response = await fetch(`${API}${path}`, {
@@ -78,6 +87,7 @@ function App() {
     const approvals = state?.approvals || [];
     return [
       { label: 'Active leads', value: leads.length },
+      { label: 'Buyer leads', value: state?.buyerLeads?.length || 0 },
       { label: 'Pending approvals', value: approvals.filter((item) => item.status === 'pending').length },
       { label: 'Email drafts', value: approvals.filter((item) => item.status === 'drafted').length },
       { label: 'Queued sends', value: state?.sendQueue?.filter((item) => ['queued', 'sending'].includes(item.status)).length || 0 },
@@ -91,6 +101,7 @@ function App() {
     { id: 'mail', label: 'Inbox' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'leads', label: 'Leads' },
+    { id: 'buyers', label: 'Buyers' },
     { id: 'ai', label: 'AI' },
     { id: 'campaigns', label: 'Campaigns' },
     { id: 'queue', label: 'Queue' }
@@ -268,6 +279,44 @@ function App() {
     setNotice('Next best action generated');
   }
 
+  async function generateBuyerLeadList() {
+    setNotice('AI is generating buyer leads from the company profile');
+    const result = await request('/buyer-leads/generate', {
+      method: 'POST',
+      body: JSON.stringify(buyerGenerator)
+    });
+    setSelectedBuyerLeadIds(result.buyerLeads.map((lead) => lead.id));
+    await refresh();
+    setNotice(`${result.buyerLeads.length} AI buyer leads generated`);
+  }
+
+  async function deleteBuyerLead(id) {
+    await request(`/buyer-leads/${id}`, { method: 'DELETE' });
+    setSelectedBuyerLeadIds((current) => current.filter((leadId) => leadId !== id));
+    await refresh();
+  }
+
+  async function queueBuyerIntroEmails() {
+    setNotice('Creating intro emails for selected buyer leads');
+    await request('/buyer-leads/queue-intros', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...buyerGenerator,
+        buyerLeadIds: selectedBuyerLeadIds,
+        templateId: buyerGenerator.templateId || state.templates[0]?.id || ''
+      })
+    });
+    await refresh();
+    setActivePanel(panelDefs.findIndex((panel) => panel.id === 'queue'));
+    setNotice('Buyer intro emails queued');
+  }
+
+  function toggleBuyerLead(id) {
+    setSelectedBuyerLeadIds((current) =>
+      current.includes(id) ? current.filter((leadId) => leadId !== id) : [...current, id]
+    );
+  }
+
   if (!state) {
     return <main className="boot">{loading}</main>;
   }
@@ -287,6 +336,7 @@ function App() {
           <a href="#mail"><Inbox size={18} /> Inbox</a>
           <a href="#approvals"><ShieldCheck size={18} /> Approvals</a>
           <a href="#leads"><MailCheck size={18} /> Leads</a>
+          <a href="#buyers"><Users size={18} /> Buyers</a>
           <a href="#ai"><Bot size={18} /> AI</a>
           <a href="#campaigns"><Users size={18} /> Campaigns</a>
         </nav>
@@ -471,7 +521,46 @@ function App() {
           {!state.leads.length && <Empty text="Qualified leads will appear after inbox analysis." />}
         </section>
 
-        <section id="ai" className={`data-slide grid two ${activePanel === 5 ? 'active' : ''}`}>
+        <section id="buyers" className={`data-slide panel ${activePanel === 5 ? 'active' : ''}`}>
+          <PanelTitle icon={Users} title="AI Buyer Lead Generation" action={<div className="button-row"><button onClick={generateBuyerLeadList}><Sparkles size={16} /> Generate</button><button className="primary" onClick={queueBuyerIntroEmails}><Send size={16} /> Queue Intros</button></div>} />
+          <div className="form-grid">
+            <Input label="Lead count" value={String(buyerGenerator.count)} onChange={(count) => setBuyerGenerator({ ...buyerGenerator, count })} />
+            <Input label="Buyer type" value={buyerGenerator.buyerType} onChange={(buyerType) => setBuyerGenerator({ ...buyerGenerator, buyerType })} />
+            <Input label="Region or address area" value={buyerGenerator.region} onChange={(region) => setBuyerGenerator({ ...buyerGenerator, region })} />
+            <Input label="Delay between intro emails, seconds" value={String(buyerGenerator.delaySeconds)} onChange={(delaySeconds) => setBuyerGenerator({ ...buyerGenerator, delaySeconds })} />
+            <label className="field">
+              <span>Intro template</span>
+              <select value={buyerGenerator.templateId || state.templates[0]?.id || ''} onChange={(event) => setBuyerGenerator({ ...buyerGenerator, templateId: event.target.value })}>
+                {state.templates.map((template) => <option value={template.id} key={template.id}>{template.name}</option>)}
+              </select>
+            </label>
+            <label className="field wide">
+              <span>Intro email goal</span>
+              <textarea value={buyerGenerator.goal} onChange={(event) => setBuyerGenerator({ ...buyerGenerator, goal: event.target.value })} />
+            </label>
+          </div>
+          <div className="buyer-list">
+            {state.buyerLeads.map((lead) => (
+              <article className="buyer-row" key={lead.id}>
+                <label>
+                  <input type="checkbox" checked={selectedBuyerLeadIds.includes(lead.id)} onChange={() => toggleBuyerLead(lead.id)} />
+                  <span>
+                    <strong>{lead.companyName}</strong>
+                    <small>{lead.address} · {lead.email}</small>
+                    <small>{lead.fitReason}</small>
+                  </span>
+                </label>
+                <div className="buyer-actions">
+                  <span className="status unverified">{lead.verificationStatus}</span>
+                  <button className="icon danger" title="Remove buyer lead" onClick={() => deleteBuyerLead(lead.id)}><Trash2 size={16} /></button>
+                </div>
+              </article>
+            ))}
+            {!state.buyerLeads.length && <Empty text="Generate buyer leads from the company profile, products, and website intelligence." />}
+          </div>
+        </section>
+
+        <section id="ai" className={`data-slide grid two ${activePanel === 6 ? 'active' : ''}`}>
           <div className="panel">
             <PanelTitle icon={Bot} title="AI Sales Brief" action={<button onClick={generateBrief}><Sparkles size={16} /> Generate</button>} />
             {brief ? (
@@ -498,7 +587,7 @@ function App() {
           </div>
         </section>
 
-        <section id="campaigns" className={`data-slide grid two ${activePanel === 6 ? 'active' : ''}`}>
+        <section id="campaigns" className={`data-slide grid two ${activePanel === 7 ? 'active' : ''}`}>
           <div className="panel">
             <PanelTitle icon={FileText} title="Email Templates" action={<button onClick={addTemplate}><Plus size={16} /> Add</button>} />
             <div className="form-grid">
@@ -554,7 +643,7 @@ function App() {
           </div>
         </section>
 
-        <section id="queue" className={`data-slide panel ${activePanel === 7 ? 'active' : ''}`}>
+        <section id="queue" className={`data-slide panel ${activePanel === 8 ? 'active' : ''}`}>
           <PanelTitle icon={Clock} title="Campaign Queue" action={<button className="primary" onClick={runQueue}><Send size={16} /> Run Queue</button>} />
           {campaign && (
             <div className="campaign-editor">

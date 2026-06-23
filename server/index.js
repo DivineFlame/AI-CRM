@@ -11,6 +11,8 @@ import {
   analyzeEmailForLead,
   draftEmailReply,
   generateCampaignDraft,
+  generateBuyerIntroEmail,
+  generateBuyerLeads,
   generateLeadBrief,
   generateMarketingEmailDraft,
   generateNextBestAction,
@@ -279,6 +281,114 @@ app.post('/api/campaigns/draft', async (req, res) => {
 
   await updateState((current) => ({ ...current, campaigns: [campaign, ...current.campaigns] }));
   res.status(201).json({ campaign, draft });
+});
+
+app.post('/api/buyer-leads/generate', async (req, res) => {
+  const state = await loadState();
+  const result = await generateBuyerLeads({
+    company: state.company,
+    products: state.products,
+    count: req.body.count || 8,
+    region: req.body.region,
+    buyerType: req.body.buyerType
+  });
+
+  const buyerLeads = (result.leads || []).slice(0, 25).map((lead) => ({
+    id: createId('buyer'),
+    companyName: lead.companyName || 'Unnamed Buyer',
+    address: lead.address || '',
+    email: lead.email || '',
+    fitReason: lead.fitReason || '',
+    interest: lead.interest || state.products[0]?.name || 'General fit',
+    score: Number(lead.score || 60),
+    source: 'ai_generated',
+    verificationStatus: 'unverified',
+    stage: 'Prospect',
+    createdAt: new Date().toISOString()
+  }));
+
+  await updateState((current) => ({
+    ...current,
+    buyerLeads: [...buyerLeads, ...current.buyerLeads]
+  }));
+
+  res.status(201).json({ buyerLeads });
+});
+
+app.patch('/api/buyer-leads/:id', async (req, res) => {
+  const state = await updateState((current) => ({
+    ...current,
+    buyerLeads: current.buyerLeads.map((lead) =>
+      lead.id === req.params.id ? { ...lead, ...req.body, updatedAt: new Date().toISOString() } : lead
+    )
+  }));
+  const lead = state.buyerLeads.find((item) => item.id === req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Buyer lead not found' });
+  res.json(lead);
+});
+
+app.delete('/api/buyer-leads/:id', async (req, res) => {
+  await updateState((state) => ({
+    ...state,
+    buyerLeads: state.buyerLeads.filter((lead) => lead.id !== req.params.id)
+  }));
+  res.status(204).end();
+});
+
+app.post('/api/buyer-leads/queue-intros', async (req, res) => {
+  const state = await loadState();
+  const selectedIds = req.body.buyerLeadIds || [];
+  const buyerLeads = state.buyerLeads.filter((lead) => selectedIds.includes(lead.id) && lead.email);
+  if (!buyerLeads.length) return res.status(400).json({ error: 'Select at least one buyer lead with an email id' });
+
+  const template = state.templates.find((item) => item.id === req.body.templateId) || state.templates[0];
+  const delaySeconds = Math.max(5, Number(req.body.delaySeconds || 60));
+  const campaignId = createId('camp');
+  const queuedItems = [];
+
+  for (const [index, buyerLead] of buyerLeads.entries()) {
+    const draft = await generateBuyerIntroEmail({
+      company: state.company,
+      products: state.products,
+      buyerLead,
+      template,
+      goal: req.body.goal
+    });
+    queuedItems.push({
+      id: createId('queue'),
+      campaignId,
+      buyerLeadId: buyerLead.id,
+      to: buyerLead.email,
+      subject: draft.subject,
+      body: draft.body,
+      status: 'queued',
+      delaySeconds,
+      sequence: index + 1,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  const campaign = {
+    id: campaignId,
+    name: req.body.name || `Buyer Intro ${new Date().toLocaleDateString()}`,
+    templateId: template?.id || '',
+    buyerLeadIds: buyerLeads.map((lead) => lead.id),
+    subject: queuedItems[0]?.subject || '',
+    body: queuedItems[0]?.body || '',
+    goal: req.body.goal || 'Introductory email to AI-generated buyer leads',
+    status: 'queued',
+    delaySeconds,
+    createdAt: new Date().toISOString(),
+    queuedAt: new Date().toISOString()
+  };
+
+  await updateState((current) => ({
+    ...current,
+    campaigns: [campaign, ...current.campaigns],
+    sendQueue: [...current.sendQueue, ...queuedItems]
+  }));
+
+  res.status(201).json({ campaign, queued: queuedItems.length, sendQueue: queuedItems });
 });
 
 app.patch('/api/campaigns/:id', async (req, res) => {

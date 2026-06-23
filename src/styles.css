@@ -165,7 +165,7 @@ h1 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
 }
 .metric {
@@ -327,6 +327,7 @@ input:focus, textarea:focus, select:focus {
 .status.queued { color: var(--blue); background: var(--soft-blue); }
 .status.sending { color: var(--amber); background: #fff4dd; }
 .status.failed { color: var(--red); background: #fee4e2; }
+.status.unverified { color: var(--amber); background: #fff4dd; }
 
 .lead-table {
   border: 1px solid var(--line);
@@ -434,6 +435,36 @@ input:focus, textarea:focus, select:focus {
   gap: 12px;
   align-items: center;
 }
+.buyer-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+.buyer-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.buyer-row label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.buyer-row small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.buyer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 .empty {
   min-height: 76px;
@@ -467,7 +498,7 @@ input:focus, textarea:focus, select:focus {
     grid-template-columns: 1fr;
     gap: 8px;
   }
-  .item-card, .email-row, .queue-row { grid-template-columns: 1fr; }
+  .item-card, .email-row, .queue-row, .buyer-row { grid-template-columns: 1fr; }
 }
 
 /* Compact production density: roughly 25% smaller than the original workspace. */
@@ -484,7 +515,7 @@ nav a { min-height: 30px; gap: 8px; padding: 0 8px; }
 h1 { font-size: 24px; }
 h2 { font-size: 14px; }
 .notice { min-height: 30px; padding: 0 9px; }
-.metrics, .grid.two, .form-grid, .product-form, .products, .email-list, .approval-grid, .template-list, .queue-list, .recipient-list { gap: 9px; }
+.metrics, .grid.two, .form-grid, .product-form, .products, .email-list, .approval-grid, .template-list, .queue-list, .recipient-list, .buyer-list { gap: 9px; }
 .metric { padding: 12px; }
 .metric span { font-size: 12px; }
 .metric strong { font-size: 21px; margin-top: 4px; }

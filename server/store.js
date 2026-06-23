@@ -63,6 +63,7 @@ const seed = {
   ],
   campaigns: [],
   sendQueue: [],
+  buyerLeads: [],
   leads: [],
   emails: []
 };
@@ -105,6 +106,7 @@ function mergeState(saved) {
     templates: Array.isArray(saved.templates) ? saved.templates : seed.templates,
     campaigns: Array.isArray(saved.campaigns) ? saved.campaigns : seed.campaigns,
     sendQueue: Array.isArray(saved.sendQueue) ? saved.sendQueue : seed.sendQueue,
+    buyerLeads: Array.isArray(saved.buyerLeads) ? saved.buyerLeads : seed.buyerLeads,
     leads: Array.isArray(saved.leads) ? saved.leads : seed.leads,
     emails: Array.isArray(saved.emails) ? saved.emails : seed.emails
   };
