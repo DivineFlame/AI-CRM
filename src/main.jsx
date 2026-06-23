@@ -28,6 +28,8 @@ function App() {
   const [companyDraft, setCompanyDraft] = useState({});
   const [productDraft, setProductDraft] = useState({ name: '', category: '', price: '', description: '' });
   const [gmail, setGmail] = useState('');
+  const [brief, setBrief] = useState(null);
+  const [campaign, setCampaign] = useState(null);
 
   async function request(path, options = {}) {
     const response = await fetch(`${API}${path}`, {
@@ -96,6 +98,13 @@ function App() {
     if (result.authUrl) window.open(result.authUrl, '_blank', 'noopener,noreferrer');
   }
 
+  async function checkComposio() {
+    setNotice('Checking Composio Gmail configuration');
+    await request('/composio/gmail/status');
+    await refresh();
+    setNotice('Composio Gmail status refreshed');
+  }
+
   async function syncEmail() {
     setNotice('Syncing Gmail messages');
     await request('/email/sync', { method: 'POST' });
@@ -129,6 +138,28 @@ function App() {
     setNotice('Approved draft sent');
   }
 
+  async function generateBrief() {
+    setNotice('Generating AI lead brief');
+    setBrief(await request('/ai/brief', { method: 'POST' }));
+    setNotice('AI brief generated');
+  }
+
+  async function generateCampaign() {
+    setNotice('Drafting AI campaign');
+    setCampaign(await request('/ai/campaign', { method: 'POST' }));
+    setNotice('Campaign draft generated');
+  }
+
+  async function generateNextAction(leadId) {
+    setNotice('Generating next best action');
+    const nextAction = await request(`/leads/${leadId}/next-action`, { method: 'POST' });
+    setState((current) => ({
+      ...current,
+      leads: current.leads.map((lead) => (lead.id === leadId ? { ...lead, aiNextAction: nextAction } : lead))
+    }));
+    setNotice('Next best action generated');
+  }
+
   if (!state) {
     return <main className="boot">{loading}</main>;
   }
@@ -148,6 +179,7 @@ function App() {
           <a href="#mail"><Inbox size={18} /> Inbox</a>
           <a href="#approvals"><ShieldCheck size={18} /> Approvals</a>
           <a href="#leads"><MailCheck size={18} /> Leads</a>
+          <a href="#ai"><Bot size={18} /> AI</a>
         </nav>
         <StatusPanel state={state} />
       </aside>
@@ -187,13 +219,22 @@ function App() {
           </div>
 
           <div className="panel">
-            <PanelTitle icon={Wifi} title="Gmail via Composio" action={<button onClick={connectGmail}><ShieldCheck size={16} /> Connect</button>} />
+            <PanelTitle
+              icon={Wifi}
+              title="Gmail via Composio"
+              action={<div className="button-row"><button onClick={checkComposio}><RefreshCw size={16} /> Check</button><button onClick={connectGmail}><ShieldCheck size={16} /> Connect</button></div>}
+            />
             <div className="gmail-row">
               <Input label="Gmail address" value={gmail} onChange={setGmail} />
               <div className="status-pill">{state.gmail.connectionStatus.replaceAll('_', ' ')}</div>
             </div>
             {state.gmail.message && <p className="muted">{state.gmail.message}</p>}
             {state.gmail.authUrl && <a className="link" href={state.gmail.authUrl} target="_blank" rel="noreferrer">Open Composio authorization</a>}
+            <div className="config-list">
+              <span>API key: <b>{state.system.composio.apiKey ? 'configured' : 'missing'}</b></span>
+              <span>Gmail auth config: <b>{state.system.composio.authConfigId ? 'configured' : 'missing'}</b></span>
+              <span>Active Gmail accounts: <b>{state.system.composio.accounts?.filter((account) => String(account.status).toLowerCase() === 'active').length || 0}</b></span>
+            </div>
           </div>
         </section>
 
@@ -269,11 +310,42 @@ function App() {
                 <span>{lead.interest}</span>
                 <span><b>{lead.stage}</b></span>
                 <span>{lead.score}</span>
-                <span>{lead.nextAction}</span>
+                <span>
+                  {lead.aiNextAction?.action || lead.nextAction}
+                  {lead.aiNextAction?.rationale && <small>{lead.aiNextAction.rationale}</small>}
+                  <button className="small-action" onClick={() => generateNextAction(lead.id)}><Sparkles size={14} /> AI action</button>
+                </span>
               </div>
             ))}
           </div>
           {!state.leads.length && <Empty text="Qualified leads will appear after inbox analysis." />}
+        </section>
+
+        <section id="ai" className="grid two">
+          <div className="panel">
+            <PanelTitle icon={Bot} title="AI Sales Brief" action={<button onClick={generateBrief}><Sparkles size={16} /> Generate</button>} />
+            {brief ? (
+              <div className="ai-output">
+                <p>{brief.summary}</p>
+                <strong>Priorities</strong>
+                {brief.priorities?.map((item) => <span key={`${item.leadId}-${item.title}`}>{item.title}: {item.action}</span>)}
+                <strong>Risks</strong>
+                {brief.risks?.map((risk) => <span key={risk}>{risk}</span>)}
+              </div>
+            ) : <Empty text="Generate an AI brief after leads are created." />}
+          </div>
+
+          <div className="panel">
+            <PanelTitle icon={Sparkles} title="AI Campaign Draft" action={<button onClick={generateCampaign}><Bot size={16} /> Draft</button>} />
+            {campaign ? (
+              <div className="ai-output">
+                <strong>{campaign.subject}</strong>
+                <textarea value={campaign.body || ''} onChange={(event) => setCampaign({ ...campaign, body: event.target.value })} />
+                <span>Goal: {campaign.goal}</span>
+                <span>Audience: {campaign.audience?.length || 0} lead(s)</span>
+              </div>
+            ) : <Empty text="Draft a nurture campaign from current leads and products." />}
+          </div>
         </section>
       </section>
     </main>
@@ -292,7 +364,7 @@ function StatusPanel({ state }) {
       <div className="system-row">
         {state.system.composioConfigured ? <Wifi size={16} /> : <WifiOff size={16} />}
         <span>Composio</span>
-        <b>{state.system.composioConfigured ? 'ready' : 'env needed'}</b>
+        <b>{state.system.composioConfigured ? 'ready' : state.system.composio.apiKey ? 'check auth' : 'env needed'}</b>
       </div>
     </div>
   );

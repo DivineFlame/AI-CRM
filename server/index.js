@@ -1,10 +1,27 @@
 import 'dotenv/config';
+import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzeEmailForLead, draftEmailReply, getOllamaStatus } from './ollama.js';
-import { createDraft, createGmailConnection, fetchRecentEmails, sendDraft } from './composio.js';
+import {
+  analyzeEmailForLead,
+  draftEmailReply,
+  generateCampaignDraft,
+  generateLeadBrief,
+  generateNextBestAction,
+  getOllamaStatus
+} from './ollama.js';
+import {
+  createDraft,
+  createGmailConnection,
+  fetchRecentEmails,
+  getGmailConfigurationStatus,
+  sendDraft
+} from './composio.js';
 import { createId, loadState, updateState } from './store.js';
 
 const app = express();
@@ -12,7 +29,18 @@ const port = process.env.PORT || 4000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, '../dist');
 
+app.set('trust proxy', 1);
+app.use(helmet({
+  contentSecurityPolicy: false
+}));
+app.use(compression());
 app.use(cors());
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  limit: 180,
+  standardHeaders: true,
+  legacyHeaders: false
+}));
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', async (req, res) => {
@@ -26,14 +54,23 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.get('/api/state', async (req, res) => {
-  const [state, ollama] = await Promise.all([loadState(), getOllamaStatus()]);
+  const [state, ollama, composio] = await Promise.all([
+    loadState(),
+    getOllamaStatus(),
+    getGmailConfigurationStatus()
+  ]);
   res.json({
     ...state,
     system: {
       ollama,
-      composioConfigured: Boolean(process.env.COMPOSIO_API_KEY)
+      composioConfigured: composio.configured,
+      composio
     }
   });
+});
+
+app.get('/api/composio/gmail/status', async (req, res) => {
+  res.json(await getGmailConfigurationStatus());
 });
 
 app.put('/api/company', async (req, res) => {
@@ -69,11 +106,24 @@ app.post('/api/gmail/connect', async (req, res) => {
       ...state.gmail,
       email,
       connectionStatus: connection.status,
+      connectedAccountId: connection.connectedAccountId || state.gmail.connectedAccountId || '',
       authUrl: connection.authUrl || '',
       message: connection.message
     }
   }));
   res.json(connection);
+});
+
+app.get('/api/gmail/callback', async (req, res) => {
+  await updateState((state) => ({
+    ...state,
+    gmail: {
+      ...state.gmail,
+      connectionStatus: 'callback_received',
+      message: 'Composio returned from Gmail authorization. Use Check Status to confirm the account is active.'
+    }
+  }));
+  res.redirect('/');
 });
 
 app.post('/api/email/sync', async (req, res) => {
@@ -125,6 +175,23 @@ app.post('/api/email/analyze', async (req, res) => {
   res.status(201).json(created);
 });
 
+app.post('/api/ai/brief', async (req, res) => {
+  const state = await loadState();
+  res.json(await generateLeadBrief(state.leads, state.approvals, state.company));
+});
+
+app.post('/api/ai/campaign', async (req, res) => {
+  const state = await loadState();
+  res.json(await generateCampaignDraft(state.company, state.products, state.leads));
+});
+
+app.post('/api/leads/:id/next-action', async (req, res) => {
+  const state = await loadState();
+  const lead = state.leads.find((item) => item.id === req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  res.json(await generateNextBestAction(lead, state.company, state.products));
+});
+
 app.patch('/api/approvals/:id', async (req, res) => {
   const next = await updateState((state) => ({
     ...state,
@@ -172,10 +239,21 @@ app.post('/api/approvals/:id/send', async (req, res) => {
   res.json(result);
 });
 
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API route not found' });
+});
+
 app.use(express.static(clientDist));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
+});
+
+app.use((error, req, res, next) => {
+  console.error(error);
+  res.status(error.status || 500).json({
+    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message
+  });
 });
 
 app.listen(port, () => {

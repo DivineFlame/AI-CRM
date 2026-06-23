@@ -90,3 +90,73 @@ Original email body: ${email.body}`;
 
   return generateWithOllama(prompt, fallback);
 }
+
+export async function generateLeadBrief(leads, approvals, company) {
+  const fallback = {
+    summary: `${company.name} has ${leads.length} active lead${leads.length === 1 ? '' : 's'} and ${approvals.filter((item) => item.status === 'pending').length} pending approval${approvals.filter((item) => item.status === 'pending').length === 1 ? '' : 's'}.`,
+    priorities: leads.slice(0, 3).map((lead) => ({
+      leadId: lead.id,
+      title: `${lead.companyName}: ${lead.interest}`,
+      action: lead.nextAction || 'Review the latest conversation and approve the reply.'
+    })),
+    risks: approvals.filter((item) => item.status === 'pending').length
+      ? ['Pending replies should be reviewed before lead interest cools.']
+      : ['No immediate approval risks detected.']
+  };
+
+  const prompt = `Return only valid JSON for a CRM manager briefing.
+Company: ${company.name} - ${company.description}
+Leads: ${JSON.stringify(leads)}
+Approvals: ${JSON.stringify(approvals)}
+
+Schema:
+{"summary":"","priorities":[{"leadId":"","title":"","action":""}],"risks":[""]}`;
+
+  return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
+export async function generateNextBestAction(lead, company, products) {
+  const fallback = {
+    action: lead.nextAction || 'Send a concise qualification reply and ask for a meeting.',
+    rationale: `The lead is interested in ${lead.interest || products[0]?.name || 'your product'} and is in ${lead.stage || 'New'} stage.`,
+    emailAngle: 'Acknowledge their need, connect it to one product outcome, and propose a short call.'
+  };
+
+  const prompt = `Return only valid JSON with the next best sales action.
+Company: ${company.name}
+Products: ${JSON.stringify(products)}
+Lead: ${JSON.stringify(lead)}
+
+Schema:
+{"action":"","rationale":"","emailAngle":""}`;
+
+  return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
+export async function generateCampaignDraft(company, products, leads) {
+  const topProduct = products[0]?.name || 'your solution';
+  const fallback = {
+    subject: `A practical next step with ${topProduct}`,
+    body: `Hi {{firstName}},\n\nBased on your interest in ${topProduct}, ${company.name} can help your team move faster while keeping every outbound email under human approval.\n\nWould a short walkthrough be useful this week?\n\nBest,\n${company.name}`,
+    audience: leads.slice(0, 5).map((lead) => lead.id),
+    goal: 'Convert recent Gmail inquiries into discovery calls.'
+  };
+
+  const prompt = `Return only valid JSON for a small sales nurture campaign.
+Company: ${company.name} - ${company.description}
+Products: ${JSON.stringify(products)}
+Leads: ${JSON.stringify(leads)}
+
+Schema:
+{"subject":"","body":"","audience":["lead_id"],"goal":""}`;
+
+  return parseJson(await generateWithOllama(prompt, JSON.stringify(fallback)), fallback);
+}
+
+function parseJson(raw, fallback) {
+  try {
+    return JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
+  } catch {
+    return fallback;
+  }
+}

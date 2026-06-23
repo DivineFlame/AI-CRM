@@ -23,8 +23,10 @@ const seed = {
   gmail: {
     email: '',
     connectionStatus: 'not_connected',
+    connectedAccountId: '',
     authUrl: '',
-    lastSync: null
+    lastSync: null,
+    message: ''
   },
   approvals: [],
   leads: [],
@@ -34,7 +36,7 @@ const seed = {
 export async function loadState() {
   try {
     const raw = await readFile(dataFile, 'utf8');
-    return { ...seed, ...JSON.parse(raw) };
+    return mergeState(JSON.parse(raw));
   } catch {
     await saveState(seed);
     return structuredClone(seed);
@@ -56,4 +58,17 @@ export async function updateState(updater) {
 
 export function createId(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function mergeState(saved) {
+  return {
+    ...seed,
+    ...saved,
+    company: { ...seed.company, ...(saved.company || {}) },
+    gmail: { ...seed.gmail, ...(saved.gmail || {}) },
+    products: Array.isArray(saved.products) ? saved.products : seed.products,
+    approvals: Array.isArray(saved.approvals) ? saved.approvals : seed.approvals,
+    leads: Array.isArray(saved.leads) ? saved.leads : seed.leads,
+    emails: Array.isArray(saved.emails) ? saved.emails : seed.emails
+  };
 }

@@ -196,6 +196,13 @@ h1 {
   gap: 12px;
   margin-bottom: 16px;
 }
+.button-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 h2 {
   margin: 0;
   display: flex;
@@ -240,6 +247,16 @@ input:focus, textarea:focus {
 .gmail-row {
   display: grid;
   gap: 12px;
+}
+.config-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.config-list b {
+  color: var(--ink);
 }
 .status-pill, .status {
   width: max-content;
@@ -330,6 +347,32 @@ input:focus, textarea:focus {
   border-radius: 999px;
   padding: 5px 9px;
 }
+.small-action {
+  min-height: 30px;
+  margin-top: 8px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.ai-output {
+  display: grid;
+  gap: 10px;
+  color: #344054;
+  line-height: 1.5;
+}
+.ai-output p {
+  margin: 0;
+}
+.ai-output strong {
+  color: var(--ink);
+}
+.ai-output span {
+  border-left: 3px solid #b9d7cd;
+  padding-left: 10px;
+}
+.ai-output textarea {
+  min-height: 180px;
+}
 
 .empty {
   min-height: 76px;
@@ -356,6 +399,8 @@ input:focus, textarea:focus {
   .workspace { padding: 18px; }
   .topbar, .approval-head, .actions { align-items: stretch; flex-direction: column; }
   nav, .metrics, .grid.two, .form-grid, .product-form { grid-template-columns: 1fr; }
+  .button-row { justify-content: stretch; }
+  .button-row button { flex: 1; }
   .table-head { display: none; }
   .table-row {
     grid-template-columns: 1fr;
