@@ -353,7 +353,7 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Local approval-first email automation</p>
+            <p className="eyebrow">Company-profile based email automation</p>
             <h1>{state.company.name}</h1>
           </div>
           <button className="primary" onClick={syncEmail}><RefreshCw size={18} /> Sync Gmail</button>

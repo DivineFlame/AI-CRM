@@ -159,8 +159,9 @@ export async function fetchRecentEmails() {
     });
     const emails = result?.data?.messages || result?.messages || result?.data || [];
     return Array.isArray(emails) ? emails.map(normalizeEmail) : [];
-  } catch {
-    return demoEmails();
+  } catch (error) {
+    console.warn(`Gmail sync skipped: ${error.message}`);
+    return [];
   }
 }
 
@@ -193,25 +194,3 @@ function normalizeEmail(email) {
   };
 }
 
-function demoEmails() {
-  return [
-    {
-      id: 'demo_1',
-      threadId: 'thread_demo_1',
-      from: 'maya@northstarops.com',
-      fromName: 'Maya Singh',
-      subject: 'Looking for CRM automation for our sales inbox',
-      body: 'We are evaluating tools that can read inbound product enquiries, qualify leads, and draft replies for approval. Can you share how your system works?',
-      receivedAt: new Date().toISOString()
-    },
-    {
-      id: 'demo_2',
-      threadId: 'thread_demo_2',
-      from: 'arjun@bluepeakretail.com',
-      fromName: 'Arjun Mehta',
-      subject: 'Need follow-up automation',
-      body: 'Our team misses follow-ups from Gmail. We need lead scoring and suggested responses, but nothing should send without manager approval.',
-      receivedAt: new Date(Date.now() - 86400000).toISOString()
-    }
-  ];
-}

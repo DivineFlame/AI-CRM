@@ -6,16 +6,16 @@ const dataFile = path.join(dataDir, 'crm.json');
 
 const seed = {
   company: {
-    name: 'Acme Growth Systems',
-    website: 'https://example.com',
-    industry: 'B2B SaaS',
+    name: '',
+    website: '',
+    industry: '',
     email: '',
     phone: '',
     address: '',
-    targetAudience: 'Growing sales teams',
-    valueProposition: 'Approval-first AI email automation for CRM workflows.',
-    tone: 'professional and consultative',
-    description: 'AI-enabled CRM and sales automation for growing teams.',
+    targetAudience: '',
+    valueProposition: '',
+    tone: '',
+    description: '',
     websiteInsights: {
       sourceUrl: '',
       title: '',
@@ -25,15 +25,7 @@ const seed = {
       updatedAt: null
     }
   },
-  products: [
-    {
-      id: 'prod_crm',
-      name: 'AI Sales Workspace',
-      category: 'CRM',
-      price: 'Custom',
-      description: 'Unified lead tracking, email intelligence, and approval-first outreach.'
-    }
-  ],
+  products: [],
   gmail: {
     email: '',
     connectionStatus: 'not_connected',
@@ -48,7 +40,7 @@ const seed = {
       id: 'tpl_intro',
       name: 'Intro Outreach',
       subject: 'A practical next step with {{productName}}',
-      body: 'Hi {{firstName}},\n\nBased on your interest in {{productName}}, {{companyName}} can help your team move faster while keeping outreach under human approval.\n\nWould a short walkthrough be useful this week?\n\nBest,\n{{companyName}}',
+      body: 'Hi {{firstName}},\n\nI wanted to introduce {{companyName}}. {{valueProposition}}\n\nWould a short conversation be useful this week?\n\nBest,\n{{companyName}}',
       tone: 'consultative',
       createdAt: new Date().toISOString()
     },
@@ -56,7 +48,7 @@ const seed = {
       id: 'tpl_follow_up',
       name: 'Warm Follow-up',
       subject: 'Following up on {{interest}}',
-      body: 'Hi {{firstName}},\n\nI wanted to follow up on your interest in {{interest}}. {{companyName}} can help with a focused workflow for lead qualification, email drafting, and approval-based sending.\n\nIs there a good time to compare notes this week?\n\nBest,\n{{companyName}}',
+      body: 'Hi {{firstName}},\n\nI wanted to follow up on {{interest}}. {{valueProposition}}\n\nIs there a good time to compare notes this week?\n\nBest,\n{{companyName}}',
       tone: 'warm',
       createdAt: new Date().toISOString()
     }
@@ -96,18 +88,37 @@ export function createId(prefix) {
 }
 
 function mergeState(saved) {
+  const migrated = migrateLegacyDefaults(saved);
   return {
     ...seed,
-    ...saved,
-    company: { ...seed.company, ...(saved.company || {}) },
-    gmail: { ...seed.gmail, ...(saved.gmail || {}) },
-    products: Array.isArray(saved.products) ? saved.products : seed.products,
-    approvals: Array.isArray(saved.approvals) ? saved.approvals : seed.approvals,
-    templates: Array.isArray(saved.templates) ? saved.templates : seed.templates,
-    campaigns: Array.isArray(saved.campaigns) ? saved.campaigns : seed.campaigns,
-    sendQueue: Array.isArray(saved.sendQueue) ? saved.sendQueue : seed.sendQueue,
-    buyerLeads: Array.isArray(saved.buyerLeads) ? saved.buyerLeads : seed.buyerLeads,
-    leads: Array.isArray(saved.leads) ? saved.leads : seed.leads,
-    emails: Array.isArray(saved.emails) ? saved.emails : seed.emails
+    ...migrated,
+    company: { ...seed.company, ...(migrated.company || {}) },
+    gmail: { ...seed.gmail, ...(migrated.gmail || {}) },
+    products: Array.isArray(migrated.products) ? migrated.products : seed.products,
+    approvals: Array.isArray(migrated.approvals) ? migrated.approvals : seed.approvals,
+    templates: Array.isArray(migrated.templates) ? migrated.templates : seed.templates,
+    campaigns: Array.isArray(migrated.campaigns) ? migrated.campaigns : seed.campaigns,
+    sendQueue: Array.isArray(migrated.sendQueue) ? migrated.sendQueue : seed.sendQueue,
+    buyerLeads: Array.isArray(migrated.buyerLeads) ? migrated.buyerLeads : seed.buyerLeads,
+    leads: Array.isArray(migrated.leads) ? migrated.leads : seed.leads,
+    emails: Array.isArray(migrated.emails) ? migrated.emails : seed.emails
   };
+}
+
+function migrateLegacyDefaults(saved) {
+  const next = structuredClone(saved || {});
+  const hasLegacyProduct = Array.isArray(next.products) && next.products.length === 1 && next.products[0]?.id === 'prod_crm';
+  if (hasLegacyProduct) {
+    next.company = { ...seed.company };
+  }
+  if (hasLegacyProduct) {
+    next.products = [];
+  }
+  if (Array.isArray(next.templates)) {
+    next.templates = next.templates.map((template) => {
+      const seedTemplate = seed.templates.find((item) => item.id === template.id);
+      return seedTemplate && template.body !== seedTemplate.body ? seedTemplate : template;
+    });
+  }
+  return next;
 }

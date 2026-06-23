@@ -1,6 +1,6 @@
 # AI CRM
 
-Approval-first CRM for Gmail communication, local Ollama drafting, Composio Gmail actions, and lead generation.
+AI CRM for Gmail communication, local Ollama drafting, Composio Gmail actions, and company-profile based lead generation.
 
 ## Local setup
 

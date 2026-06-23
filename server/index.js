@@ -592,12 +592,16 @@ async function runSendQueue() {
 
 function renderTemplate(value, company, products, lead) {
   const firstName = (lead.contactName || lead.email || 'there').split(' ')[0];
-  const productName = lead.interest || products[0]?.name || 'our solution';
+  const productName = lead.interest || products[0]?.name || company.valueProposition || company.description || 'the company offering';
+  const valueProposition = company.valueProposition || company.description || company.websiteInsights?.summary || '';
   return String(value || '')
     .replaceAll('{{firstName}}', firstName)
     .replaceAll('{{contactName}}', lead.contactName || firstName)
     .replaceAll('{{leadCompany}}', lead.companyName || '')
     .replaceAll('{{companyName}}', company.name || '')
+    .replaceAll('{{valueProposition}}', valueProposition)
+    .replaceAll('{{companyDescription}}', company.description || '')
+    .replaceAll('{{targetAudience}}', company.targetAudience || '')
     .replaceAll('{{productName}}', productName)
     .replaceAll('{{interest}}', lead.interest || productName)
     .replaceAll('{{email}}', lead.email || '');

@@ -45,13 +45,14 @@ export async function generateWithOllama(prompt, fallback) {
 export async function analyzeEmailForLead(email, company, products) {
   const productList = products.map((product) => `${product.name}: ${product.description}`).join('\n');
   const websiteContext = formatWebsiteContext(company);
+  const productName = getPrimaryProductName(products);
   const fallback = JSON.stringify({
     companyName: email.fromName || email.from?.split('@')[1] || 'Unknown',
     contactName: email.fromName || email.from,
     email: email.from,
     stage: 'New',
     score: 72,
-    interest: products[0]?.name || 'General inquiry',
+    interest: productName || company.valueProposition || 'Company profile review required',
     summary: `Potential lead from email: ${email.subject}`,
     nextAction: 'Review and approve a personalized reply.'
   });
@@ -84,7 +85,9 @@ JSON schema:
 }
 
 export async function draftEmailReply(email, lead, company) {
-  const fallback = `Hi ${lead.contactName || 'there'},\n\nThanks for reaching out about ${lead.interest}. Based on your note, ${company.name} can help with a practical next step and a short walkthrough.\n\nWould you be open to a 20-minute call this week?\n\nBest,\n${company.name}`;
+  const companyName = company.name || 'Our team';
+  const value = company.valueProposition || company.description || formatWebsiteContext(company);
+  const fallback = `Hi ${lead.contactName || 'there'},\n\nThanks for reaching out. Based on your note, ${value || 'we need to complete the company profile before sending a detailed response'}.\n\nWould you be open to a short call this week?\n\nBest,\n${companyName}`;
   const prompt = `Draft a concise, helpful sales email reply. Do not invent commitments.
 
 Company: ${company.name}
@@ -125,9 +128,10 @@ Schema:
 }
 
 export async function generateNextBestAction(lead, company, products) {
+  const productName = getPrimaryProductName(products);
   const fallback = {
     action: lead.nextAction || 'Send a concise qualification reply and ask for a meeting.',
-    rationale: `The lead is interested in ${lead.interest || products[0]?.name || 'your product'} and is in ${lead.stage || 'New'} stage.`,
+    rationale: `The lead is interested in ${lead.interest || productName || company.valueProposition || 'the company offering'} and is in ${lead.stage || 'New'} stage.`,
     emailAngle: 'Acknowledge their need, connect it to one product outcome, and propose a short call.'
   };
 
@@ -143,10 +147,10 @@ Schema:
 }
 
 export async function generateCampaignDraft(company, products, leads) {
-  const topProduct = products[0]?.name || 'your solution';
+  const topProduct = getPrimaryProductName(products);
   const fallback = {
-    subject: `A practical next step with ${topProduct}`,
-    body: `Hi {{firstName}},\n\nBased on your interest in ${topProduct}, ${company.name} can help your team move faster while keeping every outbound email under human approval.\n\nWould a short walkthrough be useful this week?\n\nBest,\n${company.name}`,
+    subject: topProduct ? `A practical next step with ${topProduct}` : `A quick introduction from ${company.name || 'our team'}`,
+    body: `Hi {{firstName}},\n\n${buildCompanyMessage(company, products)}\n\nWould a short walkthrough be useful this week?\n\nBest,\n${company.name || 'Our team'}`,
     audience: leads.slice(0, 5).map((lead) => lead.id),
     goal: 'Convert recent Gmail inquiries into discovery calls.'
   };
@@ -164,10 +168,10 @@ Schema:
 }
 
 export async function generateMarketingEmailDraft({ company, products, leads, template, goal }) {
-  const topProduct = products[0]?.name || 'your solution';
+  const topProduct = getPrimaryProductName(products);
   const fallback = {
-    subject: template?.subject || `A practical next step with ${topProduct}`,
-    body: template?.body || `Hi {{firstName}},\n\nBased on your interest in {{interest}}, ${company.name} can help with a focused next step.\n\nWould you be open to a short walkthrough this week?\n\nBest,\n${company.name}`,
+    subject: template?.subject || (topProduct ? `A practical next step with ${topProduct}` : `A quick introduction from ${company.name || 'our team'}`),
+    body: template?.body || `Hi {{firstName}},\n\n${buildCompanyMessage(company, products)}\n\nWould you be open to a short walkthrough this week?\n\nBest,\n${company.name || 'Our team'}`,
     rationale: `Drafted for ${leads.length} selected lead${leads.length === 1 ? '' : 's'} using ${template?.name || 'a general'} template.`,
     personalizationFields: ['firstName', 'companyName', 'productName', 'interest']
   };
@@ -193,15 +197,15 @@ Schema:
 }
 
 export async function generateBuyerLeads({ company, products, count = 8, region = '', buyerType = '', webCandidates = [] }) {
-  const topProduct = products[0]?.name || 'your solution';
+  const topProduct = getPrimaryProductName(products);
   const fallback = {
     leads: webCandidates.slice(0, Math.min(Number(count) || 8, 25)).map((candidate) => ({
       companyName: candidate.companyName,
       address: candidate.address || region || 'Address not found on public page',
       email: candidate.email,
       website: candidate.website || candidate.sourceUrl,
-      fitReason: `Web result appears relevant for ${topProduct}. ${candidate.snippet || candidate.siteSummary || ''}`.trim(),
-      interest: topProduct,
+      fitReason: `Web result appears relevant for ${topProduct || company.valueProposition || company.description || 'the company profile'}. ${candidate.snippet || candidate.siteSummary || ''}`.trim(),
+      interest: topProduct || company.valueProposition || company.industry || 'Company profile match',
       score: candidate.emailFoundOnPage ? 78 : 62,
       verificationStatus: candidate.emailFoundOnPage ? 'web_email_found' : 'domain_email_suggested'
     }))
@@ -229,10 +233,10 @@ Schema:
 }
 
 export async function generateBuyerIntroEmail({ company, products, buyerLead, template, goal }) {
-  const topProduct = products[0]?.name || buyerLead.interest || 'our solution';
+  const topProduct = getPrimaryProductName(products) || buyerLead.interest || company.valueProposition || company.description;
   const fallback = {
-    subject: `Intro: ${company.name} for ${buyerLead.companyName}`,
-    body: `Hi there,\n\nI am reaching out from ${company.name}. Based on your company profile, ${topProduct} may be relevant for improving sales communication and lead follow-up while keeping email sends approval-based.\n\nWould you be open to a short introduction this week?\n\nBest,\n${company.name}`
+    subject: `Intro: ${company.name || 'our team'} for ${buyerLead.companyName}`,
+    body: `Hi there,\n\nI am reaching out from ${company.name || 'our team'}. ${buildCompanyMessage(company, products)}\n\nWould you be open to a short introduction this week?\n\nBest,\n${company.name || 'Our team'}`
   };
 
   const prompt = `Return only valid JSON. Draft a concise introductory B2B email for an AI-generated buyer prospect.
@@ -287,6 +291,17 @@ function formatWebsiteContext(company) {
     messages ? `Key messages: ${messages}` : '',
     angles ? `Suggested email angles: ${angles}` : ''
   ].filter(Boolean).join('\n') || 'No website intelligence gathered yet.';
+}
+
+function getPrimaryProductName(products) {
+  return products.find((product) => product.name)?.name || '';
+}
+
+function buildCompanyMessage(company, products) {
+  const product = products.find((item) => item.name || item.description);
+  const productText = product ? `${product.name}${product.description ? `: ${product.description}` : ''}` : '';
+  const message = company.valueProposition || company.description || productText || company.websiteInsights?.summary;
+  return message || 'The company profile and website intelligence should be completed before sending detailed outreach.';
 }
 
 function parseJson(raw, fallback) {

@@ -160,7 +160,7 @@ async function searchBing(query, count) {
   const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; AI-CRM/1.0; +https://example.com/bot)',
+      'User-Agent': 'Mozilla/5.0 (compatible; AI-CRM/1.0)',
       Accept: 'text/html'
     }
   });
