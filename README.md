@@ -1,6 +1,6 @@
 # AI CRM
 
-AI CRM for Gmail communication, a Paperclip-orchestrated Hermes agent, Composio Gmail actions, and company-profile based lead generation.
+AI CRM for Gmail communication, direct Hermes Agent integration, Composio Gmail actions, and company-profile based lead generation.
 
 ## Local setup
 
@@ -22,27 +22,19 @@ COMPOSIO_GMAIL_CONNECTED_ACCOUNT_ID=
 COMPOSIO_GMAIL_TOOLKIT_VERSION=20260506_01
 APP_BASE_URL=http://38.247.188.228
 PUBLIC_BASE_URL=http://38.247.188.228
-PAPERCLIP_BASE_URL=http://127.0.0.1:3100
-PAPERCLIP_COMPANY_ID=your_paperclip_company_id
-PAPERCLIP_AGENT_ID=your_paperclip_agent_id
-PAPERCLIP_API_KEY=your_paperclip_bearer_key
-PAPERCLIP_TIMEOUT_MS=120000
-PAPERCLIP_POLL_INTERVAL_MS=1500
 HERMES_BASE_URL=http://127.0.0.1:8642
 HERMES_API_KEY=your_hermes_api_server_key
 HERMES_MODEL=hermes-agent
 HERMES_TIMEOUT_MS=120000
-HERMES_BRIDGE_TOKEN=use_a_separate_random_secret
 HOST=0.0.0.0
 PORT=4000
 ```
 
-Paperclip and Hermes Agent must be deployed separately. The CRM does not connect to Ollama and does not require an Ollama model.
+The CRM connects directly to Hermes Agent and requires no additional AI orchestration layer.
 
-For Docker/Dokploy, if Paperclip and Hermes are reachable on the Docker host, use:
+For Docker/Dokploy, when Hermes runs on the same host at its default port, use:
 
 ```env
-PAPERCLIP_BASE_URL=http://host.docker.internal:3100
 HERMES_BASE_URL=http://host.docker.internal:8642
 ```
 
@@ -56,7 +48,7 @@ Recommended Dokploy settings:
 - Compose file: `docker-compose.yml`
 - Exposed app port: `4000`
 - Health check path: `/api/health`
-- Environment variables: set the Composio values plus `PAPERCLIP_BASE_URL`, `PAPERCLIP_COMPANY_ID`, `PAPERCLIP_AGENT_ID`, `PAPERCLIP_API_KEY`, `HERMES_BASE_URL`, `HERMES_API_KEY`, and `HERMES_BRIDGE_TOKEN`
+- Environment variables: set the Composio values plus `HERMES_BASE_URL`, `HERMES_API_KEY`, `HERMES_MODEL`, and `HERMES_TIMEOUT_MS`
 
 The Node server serves both the API and the built React app in production.
 
@@ -67,17 +59,7 @@ The Node server serves both the API and the built React app in production.
 3. Set the same URL and key as `HERMES_BASE_URL` and `HERMES_API_KEY` in the CRM. Hermes uses port `8642` by default.
 4. Configure the desired inference provider and model inside Hermes. The CRM talks to the Hermes agent API, not to the underlying model provider.
 
-## Paperclip Hermes adapter
-
-1. Create a Paperclip company and a dedicated CRM agent.
-2. Configure that agent with Paperclip's `http` adapter.
-3. Set the adapter URL to `https://your-crm.example.com/api/agents/hermes/run`.
-4. Add adapter header `Authorization: Bearer <HERMES_BRIDGE_TOKEN>`.
-5. Give the HTTP adapter enough time for Hermes to finish, normally at least `120` seconds.
-6. Create a long-lived Paperclip API key for the CRM agent from `POST /api/agents/{agentId}/keys`.
-7. Set the Paperclip company ID, agent ID, API key, and Hermes bridge token in Dokploy.
-
-For each AI operation, the CRM creates a Paperclip issue and invokes the assigned agent. Paperclip calls the secured CRM bridge, the bridge runs the issue through Hermes `/v1/responses`, then writes the result back to the Paperclip issue and marks it done. Paperclip remains the control plane while Hermes provides the agent runtime, tools, memory, and model-provider connection.
+For every AI operation, the CRM sends the company-profile-based prompt directly to Hermes `/v1/responses`. Hermes provides the agent runtime, tools, memory, and model-provider connection.
 
 ## Composio Gmail setup
 
@@ -105,7 +87,7 @@ For Composio-managed OAuth, the app uses `connectedAccounts.link(userId, authCon
 - AI marketing email drafts using approved email templates
 - Selected-list campaign queue with a configurable delay between each email
 
-All AI generation is orchestrated by Paperclip and executed by the separately deployed Hermes agent. Requests fail visibly if either service is unavailable or misconfigured.
+All AI generation is executed directly by the separately deployed Hermes agent. Requests fail visibly if Hermes is unavailable or misconfigured.
 
 ## Marketing campaign queue
 
@@ -122,7 +104,6 @@ The queue never marks emails as sent unless Composio/Gmail returns successfully.
 
 ```bash
 curl https://your-domain.example.com/api/health
-curl https://your-domain.example.com/api/paperclip/status
 curl https://your-domain.example.com/api/hermes/status
 curl https://your-domain.example.com/api/composio/gmail/status
 npm run check:composio

@@ -1,106 +1,9 @@
-const PAPERCLIP_BASE_URL = (process.env.PAPERCLIP_BASE_URL || 'http://127.0.0.1:3100').replace(/\/+$/, '');
-const PAPERCLIP_COMPANY_ID = process.env.PAPERCLIP_COMPANY_ID || '';
-const PAPERCLIP_AGENT_ID = process.env.PAPERCLIP_AGENT_ID || '';
-const PAPERCLIP_API_KEY = process.env.PAPERCLIP_API_KEY || '';
-const PAPERCLIP_TIMEOUT_MS = Math.max(Number(process.env.PAPERCLIP_TIMEOUT_MS || 120000), 5000);
-const PAPERCLIP_POLL_INTERVAL_MS = Math.max(Number(process.env.PAPERCLIP_POLL_INTERVAL_MS || 1500), 500);
-const RESULT_MARKER = 'AI_CRM_RESULT:';
+import { runHermesAgent } from './hermes.js';
 
-export async function getPaperclipStatus() {
-  const configured = Boolean(PAPERCLIP_COMPANY_ID && PAPERCLIP_AGENT_ID && PAPERCLIP_API_KEY);
-  if (!configured) {
-    return {
-      online: false,
-      configured: false,
-      agent: 'not configured',
-      error: 'Paperclip company, agent, and API key are required'
-    };
-  }
-
-  try {
-    const agent = await paperclipRequest(`/api/agents/${PAPERCLIP_AGENT_ID}`);
-    if (agent.companyId && agent.companyId !== PAPERCLIP_COMPANY_ID) {
-      throw new Error('Configured Paperclip agent does not belong to PAPERCLIP_COMPANY_ID');
-    }
-    return {
-      online: true,
-      configured: true,
-      agent: agent.name || agent.title || PAPERCLIP_AGENT_ID,
-      agentStatus: agent.status || 'unknown',
-      adapterType: agent.adapterType || '',
-      companyId: agent.companyId || PAPERCLIP_COMPANY_ID
-    };
-  } catch (error) {
-    return {
-      online: false,
-      configured: true,
-      agent: PAPERCLIP_AGENT_ID,
-      error: error.message
-    };
-  }
-}
-
-export async function generateWithPaperclip(prompt, _fallback, taskType = 'crm-generation') {
-  if (!PAPERCLIP_COMPANY_ID || !PAPERCLIP_AGENT_ID || !PAPERCLIP_API_KEY) {
-    throw new Error('Paperclip is not configured. Set PAPERCLIP_COMPANY_ID, PAPERCLIP_AGENT_ID, and PAPERCLIP_API_KEY.');
-  }
-
-  try {
-    const issue = await paperclipRequest(`/api/companies/${PAPERCLIP_COMPANY_ID}/issues`, {
-      method: 'POST',
-      body: {
-        title: `AI CRM: ${taskType}`,
-        description: buildAgentTask(prompt),
-        status: 'todo',
-        priority: 'high',
-        assigneeAgentId: PAPERCLIP_AGENT_ID
-      }
-    });
-    if (!issue.id) throw new Error('Paperclip did not return an issue ID');
-
-    await paperclipRequest(`/api/agents/${PAPERCLIP_AGENT_ID}/heartbeat/invoke`, {
-      method: 'POST',
-      body: {
-        reason: 'AI CRM requested generation',
-        payload: { issueId: issue.id, source: 'ai-crm', taskType },
-        idempotencyKey: `ai-crm:${issue.id}`,
-        forceFreshSession: true
-      }
-    });
-
-    return await waitForAgentResult(issue.id);
-  } catch (error) {
-    console.warn(`Paperclip ${taskType} failed:`, error.message);
-    throw error;
-  }
-}
-
-export async function getPaperclipIssue(issueId) {
-  if (!issueId) throw new Error('Paperclip issue ID is required');
-  return paperclipRequest(`/api/issues/${issueId}`);
-}
-
-export async function checkoutPaperclipIssue(issueId, runId) {
-  return paperclipRequest(`/api/issues/${issueId}/checkout`, {
-    method: 'POST',
-    headers: runId ? { 'X-Paperclip-Run-Id': runId } : {},
-    body: {
-      agentId: PAPERCLIP_AGENT_ID,
-      expectedStatuses: ['todo', 'backlog', 'in_review', 'blocked', 'in_progress']
-    }
-  });
-}
-
-export async function completePaperclipIssue(issueId, result, runId) {
-  await paperclipRequest(`/api/issues/${issueId}/comments`, {
-    method: 'POST',
-    headers: runId ? { 'X-Paperclip-Run-Id': runId } : {},
-    body: { body: `${RESULT_MARKER}${result}` }
-  });
-  return paperclipRequest(`/api/issues/${issueId}`, {
-    method: 'PATCH',
-    headers: runId ? { 'X-Paperclip-Run-Id': runId } : {},
-    body: { status: 'done' }
+async function generateWithHermes(prompt, _fallback, taskType = 'crm-generation') {
+  return runHermesAgent(buildAgentTask(prompt), {
+    sessionKey: `ai-crm:${taskType}`,
+    idempotencyKey: `ai-crm:${taskType}:${createRequestId()}`
   });
 }
 
@@ -138,7 +41,7 @@ Body: ${email.body}
 JSON schema:
 {"companyName":"","contactName":"","email":"","stage":"New|Qualified|Proposal|Nurture","score":0,"interest":"","summary":"","nextAction":""}`;
 
-  const raw = await generateWithPaperclip(prompt, fallback, 'analyze-email-lead');
+  const raw = await generateWithHermes(prompt, fallback, 'analyze-email-lead');
   try {
     return JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
   } catch {
@@ -162,7 +65,7 @@ Lead: ${JSON.stringify(lead)}
 Original email subject: ${email.subject}
 Original email body: ${email.body}`;
 
-  return generateWithPaperclip(prompt, fallback, 'draft-email-reply');
+  return generateWithHermes(prompt, fallback, 'draft-email-reply');
 }
 
 export async function generateLeadBrief(leads, approvals, company) {
@@ -186,7 +89,7 @@ Approvals: ${JSON.stringify(approvals)}
 Schema:
 {"summary":"","priorities":[{"leadId":"","title":"","action":""}],"risks":[""]}`;
 
-  return parseJson(await generateWithPaperclip(prompt, JSON.stringify(fallback), 'lead-brief'), fallback);
+  return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'lead-brief'), fallback);
 }
 
 export async function generateNextBestAction(lead, company, products) {
@@ -205,7 +108,7 @@ Lead: ${JSON.stringify(lead)}
 Schema:
 {"action":"","rationale":"","emailAngle":""}`;
 
-  return parseJson(await generateWithPaperclip(prompt, JSON.stringify(fallback), 'next-best-action'), fallback);
+  return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'next-best-action'), fallback);
 }
 
 export async function generateCampaignDraft(company, products, leads) {
@@ -226,7 +129,7 @@ Leads: ${JSON.stringify(leads)}
 Schema:
 {"subject":"","body":"","audience":["lead_id"],"goal":""}`;
 
-  return parseJson(await generateWithPaperclip(prompt, JSON.stringify(fallback), 'campaign-draft'), fallback);
+  return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'campaign-draft'), fallback);
 }
 
 export async function generateMarketingEmailDraft({ company, products, leads, template, goal }) {
@@ -255,7 +158,7 @@ Keep the email truthful, concise, and suitable for human approval before queue s
 Schema:
 {"subject":"","body":"","rationale":"","personalizationFields":[""]}`;
 
-  return parseJson(await generateWithPaperclip(prompt, JSON.stringify(fallback), 'marketing-email-draft'), fallback);
+  return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'marketing-email-draft'), fallback);
 }
 
 export async function generateBuyerLeads({ company, products, count = 8, region = '', buyerType = '', webCandidates = [] }) {
@@ -291,7 +194,7 @@ Do not output placeholder companies.
 Schema:
 {"leads":[{"companyName":"","address":"","email":"","website":"","fitReason":"","interest":"","score":0,"verificationStatus":"web_email_found|domain_email_suggested|unverified"}]}`;
 
-  return parseJson(await generateWithPaperclip(prompt, JSON.stringify(fallback), 'qualify-web-buyers'), fallback);
+  return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'qualify-web-buyers'), fallback);
 }
 
 export async function generateBuyerIntroEmail({ company, products, buyerLead, template, goal }) {
@@ -314,7 +217,7 @@ Goal: ${goal || 'Introduce the company and ask for a short call'}
 Schema:
 {"subject":"","body":""}`;
 
-  return parseJson(await generateWithPaperclip(prompt, JSON.stringify(fallback), 'buyer-intro-email'), fallback);
+  return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'buyer-intro-email'), fallback);
 }
 
 export async function summarizeWebsiteForEmail({ company, websiteData }) {
@@ -341,7 +244,7 @@ Visible text: ${websiteData.text.slice(0, 8000)}
 Schema:
 {"sourceUrl":"","title":"","summary":"","keyMessages":[""],"suggestedAngles":[""],"updatedAt":""}`;
 
-  return parseJson(await generateWithPaperclip(prompt, JSON.stringify(fallback), 'website-email-intelligence'), fallback);
+  return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'website-email-intelligence'), fallback);
 }
 
 function formatWebsiteContext(company) {
@@ -375,90 +278,18 @@ function parseJson(raw, fallback) {
 }
 
 function buildAgentTask(prompt) {
-  return `You are the dedicated Hermes agent for an AI CRM. Complete this request through the Hermes runtime configured for this Paperclip agent.
+  return `You are the dedicated Hermes agent for an AI CRM.
 
 Rules:
 - Use only the company, website, product, lead, and email facts supplied below.
 - Do not invent companies, contacts, email addresses, claims, or product capabilities.
 - Follow the requested output schema exactly.
-- Put the final answer in one issue comment beginning with ${RESULT_MARKER}
-- After posting that comment, mark this issue done.
 - Do not wrap the result in markdown fences.
 
 REQUEST
 ${prompt}`;
 }
 
-async function waitForAgentResult(issueId) {
-  const deadline = Date.now() + PAPERCLIP_TIMEOUT_MS;
-
-  while (Date.now() < deadline) {
-    const [issue, comments] = await Promise.all([
-      paperclipRequest(`/api/issues/${issueId}`),
-      paperclipRequest(`/api/issues/${issueId}/comments`)
-    ]);
-    const result = findAgentResult(comments);
-    if (result) return result;
-
-    if (['cancelled', 'blocked'].includes(issue.status)) {
-      throw new Error(`Paperclip issue ended with status ${issue.status}`);
-    }
-    if (issue.status === 'done') {
-      throw new Error('Paperclip agent completed without an AI_CRM_RESULT comment');
-    }
-
-    await sleep(PAPERCLIP_POLL_INTERVAL_MS);
-  }
-
-  throw new Error(`Paperclip issue ${issueId} timed out after ${PAPERCLIP_TIMEOUT_MS}ms`);
-}
-
-function findAgentResult(comments) {
-  if (!Array.isArray(comments)) return '';
-  for (const comment of [...comments].reverse()) {
-    const body = String(comment.body || comment.content || '');
-    const markerIndex = body.indexOf(RESULT_MARKER);
-    if (markerIndex >= 0) {
-      return body.slice(markerIndex + RESULT_MARKER.length).trim();
-    }
-  }
-  return '';
-}
-
-async function paperclipRequest(path, { method = 'GET', body, headers = {} } = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.min(PAPERCLIP_TIMEOUT_MS, 30000));
-  try {
-    const response = await fetch(`${PAPERCLIP_BASE_URL}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${PAPERCLIP_API_KEY}`,
-        Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...headers
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal
-    });
-    const text = await response.text();
-    const data = text ? safeJson(text) : {};
-    if (!response.ok) {
-      throw new Error(data.error || data.message || `Paperclip returned ${response.status}`);
-    }
-    return data;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function safeJson(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return { message: value };
-  }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function createRequestId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
