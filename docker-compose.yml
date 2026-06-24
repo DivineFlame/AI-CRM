@@ -1,7 +1,6 @@
 services:
   ai-crm:
     build: .
-    container_name: ai-crm
     restart: unless-stopped
     ports:
       - "${PORT:-4000}:4000"
