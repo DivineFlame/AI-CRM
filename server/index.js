@@ -29,7 +29,7 @@ import { createId, loadState, updateState } from './store.js';
 import { gatherWebsiteData, searchBuyerCompanies } from './website.js';
 
 const app = express();
-const port = process.env.PORT || 4000;
+const port = process.env.PORT || 4001;
 const host = process.env.HOST || '0.0.0.0';
 const publicBaseUrl = process.env.APP_BASE_URL || process.env.PUBLIC_BASE_URL || `http://localhost:${port}`;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

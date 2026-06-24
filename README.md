@@ -27,7 +27,7 @@ HERMES_API_KEY=your_hermes_api_server_key
 HERMES_MODEL=hermes-agent
 HERMES_TIMEOUT_MS=120000
 HOST=0.0.0.0
-PORT=4000
+PORT=4001
 ```
 
 The CRM connects directly to Hermes Agent and requires no additional AI orchestration layer.
@@ -46,12 +46,12 @@ Recommended Dokploy settings:
 
 - Build type: Docker Compose
 - Compose file: `docker-compose.yml`
-- Internal app port: `4000` (configure this as the Dokploy domain/service port)
+- Internal app port: `4001` (configure this as the Dokploy domain/service port)
 - Health check path: `/api/health`
 - Environment variables: set the Composio values plus `HERMES_BASE_URL`, `HERMES_API_KEY`, `HERMES_MODEL`, and `HERMES_TIMEOUT_MS`
 
 The Node server serves both the API and the built React app in production.
-The Compose service uses `expose` instead of publishing host port `4000`, allowing Dokploy to route through its proxy without colliding with older deployments.
+The Compose service uses internal port `4001` without publishing a host port, allowing Dokploy to route through its proxy without colliding with older deployments.
 
 ## Hermes Agent setup
 
