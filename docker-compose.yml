@@ -2,8 +2,8 @@ services:
   ai-crm:
     build: .
     restart: unless-stopped
-    ports:
-      - "${PORT:-4000}:4000"
+    expose:
+      - "4000"
     environment:
       PORT: 4000
       NODE_ENV: production

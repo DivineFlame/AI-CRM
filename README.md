@@ -46,11 +46,12 @@ Recommended Dokploy settings:
 
 - Build type: Docker Compose
 - Compose file: `docker-compose.yml`
-- Exposed app port: `4000`
+- Internal app port: `4000` (configure this as the Dokploy domain/service port)
 - Health check path: `/api/health`
 - Environment variables: set the Composio values plus `HERMES_BASE_URL`, `HERMES_API_KEY`, `HERMES_MODEL`, and `HERMES_TIMEOUT_MS`
 
 The Node server serves both the API and the built React app in production.
+The Compose service uses `expose` instead of publishing host port `4000`, allowing Dokploy to route through its proxy without colliding with older deployments.
 
 ## Hermes Agent setup
 
