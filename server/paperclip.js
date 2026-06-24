@@ -27,6 +27,7 @@ export async function getPaperclipStatus() {
       configured: true,
       agent: agent.name || agent.title || PAPERCLIP_AGENT_ID,
       agentStatus: agent.status || 'unknown',
+      adapterType: agent.adapterType || '',
       companyId: agent.companyId || PAPERCLIP_COMPANY_ID
     };
   } catch (error) {
@@ -72,6 +73,35 @@ export async function generateWithPaperclip(prompt, _fallback, taskType = 'crm-g
     console.warn(`Paperclip ${taskType} failed:`, error.message);
     throw error;
   }
+}
+
+export async function getPaperclipIssue(issueId) {
+  if (!issueId) throw new Error('Paperclip issue ID is required');
+  return paperclipRequest(`/api/issues/${issueId}`);
+}
+
+export async function checkoutPaperclipIssue(issueId, runId) {
+  return paperclipRequest(`/api/issues/${issueId}/checkout`, {
+    method: 'POST',
+    headers: runId ? { 'X-Paperclip-Run-Id': runId } : {},
+    body: {
+      agentId: PAPERCLIP_AGENT_ID,
+      expectedStatuses: ['todo', 'backlog', 'in_review', 'blocked', 'in_progress']
+    }
+  });
+}
+
+export async function completePaperclipIssue(issueId, result, runId) {
+  await paperclipRequest(`/api/issues/${issueId}/comments`, {
+    method: 'POST',
+    headers: runId ? { 'X-Paperclip-Run-Id': runId } : {},
+    body: { body: `${RESULT_MARKER}${result}` }
+  });
+  return paperclipRequest(`/api/issues/${issueId}`, {
+    method: 'PATCH',
+    headers: runId ? { 'X-Paperclip-Run-Id': runId } : {},
+    body: { status: 'done' }
+  });
 }
 
 export async function analyzeEmailForLead(email, company, products) {
@@ -345,7 +375,7 @@ function parseJson(raw, fallback) {
 }
 
 function buildAgentTask(prompt) {
-  return `You are the dedicated AI agent for an AI CRM. Complete this request using the Ollama model configured in your Paperclip deployment.
+  return `You are the dedicated Hermes agent for an AI CRM. Complete this request through the Hermes runtime configured for this Paperclip agent.
 
 Rules:
 - Use only the company, website, product, lead, and email facts supplied below.
@@ -395,7 +425,7 @@ function findAgentResult(comments) {
   return '';
 }
 
-async function paperclipRequest(path, { method = 'GET', body } = {}) {
+async function paperclipRequest(path, { method = 'GET', body, headers = {} } = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.min(PAPERCLIP_TIMEOUT_MS, 30000));
   try {
@@ -404,7 +434,8 @@ async function paperclipRequest(path, { method = 'GET', body } = {}) {
       headers: {
         Authorization: `Bearer ${PAPERCLIP_API_KEY}`,
         Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {})
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...headers
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal

@@ -16,9 +16,13 @@ import {
   generateLeadBrief,
   generateMarketingEmailDraft,
   generateNextBestAction,
+  checkoutPaperclipIssue,
+  completePaperclipIssue,
+  getPaperclipIssue,
   getPaperclipStatus,
   summarizeWebsiteForEmail
 } from './paperclip.js';
+import { getHermesStatus, runHermesAgent } from './hermes.js';
 import {
   createGmailConnection,
   fetchRecentEmails,
@@ -51,12 +55,13 @@ app.use(rateLimit({
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', async (req, res) => {
-  const paperclip = await getPaperclipStatus();
+  const [paperclip, hermes] = await Promise.all([getPaperclipStatus(), getHermesStatus()]);
   res.json({
     ok: true,
     service: 'ai-crm',
     composioConfigured: Boolean(process.env.COMPOSIO_API_KEY),
-    paperclip
+    paperclip,
+    hermes
   });
 });
 
@@ -64,16 +69,45 @@ app.get('/api/paperclip/status', async (req, res) => {
   res.json(await getPaperclipStatus());
 });
 
+app.get('/api/hermes/status', async (req, res) => {
+  res.json(await getHermesStatus());
+});
+
+app.post('/api/agents/hermes/run', async (req, res) => {
+  const bridgeToken = process.env.HERMES_BRIDGE_TOKEN || '';
+  const suppliedToken = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!bridgeToken) return res.status(503).json({ error: 'HERMES_BRIDGE_TOKEN is not configured' });
+  if (!suppliedToken || suppliedToken !== bridgeToken) {
+    return res.status(401).json({ error: 'Invalid Hermes bridge token' });
+  }
+
+  const issueId = req.body.issueId || req.body.context?.issueId || req.body.context?.taskId;
+  if (!issueId) return res.status(400).json({ error: 'Paperclip issue ID is missing from adapter payload' });
+
+  const issue = await getPaperclipIssue(issueId);
+  if (issue.status !== 'in_progress') {
+    await checkoutPaperclipIssue(issueId, req.body.runId);
+  }
+  const result = await runHermesAgent(issue.description || issue.title, {
+    sessionKey: `ai-crm:${issueId}`,
+    idempotencyKey: `paperclip:${req.body.runId || issueId}`
+  });
+  await completePaperclipIssue(issueId, result, req.body.runId);
+  res.json({ ok: true, issueId, result });
+});
+
 app.get('/api/state', async (req, res) => {
-  const [state, paperclip, composio] = await Promise.all([
+  const [state, paperclip, hermes, composio] = await Promise.all([
     loadState(),
     getPaperclipStatus(),
+    getHermesStatus(),
     getGmailConfigurationStatus()
   ]);
   res.json({
     ...state,
     system: {
       paperclip,
+      hermes,
       composioConfigured: composio.configured,
       composio
     }

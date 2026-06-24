@@ -163,7 +163,7 @@ function App() {
   }
 
   async function analyzeEmail(emailId) {
-    setNotice('Paperclip agent is analyzing lead intent and drafting a reply');
+    setNotice('Hermes agent is analyzing lead intent and drafting a reply through Paperclip');
     await request('/email/analyze', { method: 'POST', body: JSON.stringify({ emailIds: [emailId] }) });
     await refresh();
     setNotice('Lead and approval draft created');
@@ -691,12 +691,18 @@ function App() {
 
 function StatusPanel({ state }) {
   const paperclipOnline = state.system.paperclip.online;
+  const hermesOnline = state.system.hermes.online;
   return (
     <div className="system">
       <div className="system-row">
         {paperclipOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
         <span>Paperclip</span>
         <b>{paperclipOnline ? state.system.paperclip.agent : state.system.paperclip.configured ? 'offline' : 'env needed'}</b>
+      </div>
+      <div className="system-row">
+        {hermesOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
+        <span>Hermes</span>
+        <b>{hermesOnline ? state.system.hermes.model : state.system.hermes.configured ? 'offline' : 'env needed'}</b>
       </div>
       <div className="system-row">
         {state.system.composioConfigured ? <Wifi size={16} /> : <WifiOff size={16} />}
