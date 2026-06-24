@@ -90,6 +90,8 @@ For Composio-managed OAuth, the app uses `connectedAccounts.link(userId, authCon
 
 All AI generation is executed directly by the separately deployed Hermes agent. Requests fail visibly if Hermes is unavailable or misconfigured.
 
+AI-generated leads, campaigns, email replies, intro emails, and drafts use the saved company profile, products, and gathered website intelligence as the exclusive source for company claims and positioning. Recipient emails, lead records, web candidates, templates, and goals are used only for recipient context, selection, structure, and tone. AI generation is blocked until the company profile and website intelligence are complete.
+
 ## Marketing campaign queue
 
 1. Add approved templates in `Email Templates`.

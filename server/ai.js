@@ -8,8 +8,7 @@ async function generateWithHermes(prompt, _fallback, taskType = 'crm-generation'
 }
 
 export async function analyzeEmailForLead(email, company, products) {
-  const productList = products.map((product) => `${product.name}: ${product.description}`).join('\n');
-  const websiteContext = formatWebsiteContext(company);
+  const companyContext = requireCompanyKnowledge(company, products);
   const productName = getPrimaryProductName(products);
   const fallback = JSON.stringify({
     companyName: email.fromName || email.from?.split('@')[1] || 'Unknown',
@@ -23,20 +22,15 @@ export async function analyzeEmailForLead(email, company, products) {
   });
 
   const prompt = `You are a CRM lead analyst. Return only valid JSON.
-Company profile:
-${company.name} - ${company.description}
-Target audience: ${company.targetAudience || ''}
-Value proposition: ${company.valueProposition || ''}
-Website context:
-${websiteContext}
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
 
-Products:
-${productList}
-
-Email:
+INCOMING EMAIL TO ANALYZE:
 From: ${email.from}
 Subject: ${email.subject}
 Body: ${email.body}
+
+Use the incoming email only to identify the sender, intent, and fit. Derive all company offering, product, value, and positioning references exclusively from APPROVED COMPANY KNOWLEDGE.
 
 JSON schema:
 {"companyName":"","contactName":"","email":"","stage":"New|Qualified|Proposal|Nurture","score":0,"interest":"","summary":"","nextAction":""}`;
@@ -49,26 +43,27 @@ JSON schema:
   }
 }
 
-export async function draftEmailReply(email, lead, company) {
+export async function draftEmailReply(email, lead, company, products) {
+  const companyContext = requireCompanyKnowledge(company, products);
   const companyName = company.name || 'Our team';
-  const value = company.valueProposition || company.description || formatWebsiteContext(company);
+  const value = buildCompanyMessage(company, products);
   const fallback = `Hi ${lead.contactName || 'there'},\n\nThanks for reaching out. Based on your note, ${value || 'we need to complete the company profile before sending a detailed response'}.\n\nWould you be open to a short call this week?\n\nBest,\n${companyName}`;
-  const prompt = `Draft a concise, helpful sales email reply. Do not invent commitments.
+  const prompt = `Draft a concise, helpful sales email reply.
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
 
-Company: ${company.name}
-Company description: ${company.description}
-Company value proposition: ${company.valueProposition || ''}
-Preferred tone: ${company.tone || 'professional'}
-Website intelligence for email context:
-${formatWebsiteContext(company)}
+RECIPIENT CONTEXT:
 Lead: ${JSON.stringify(lead)}
 Original email subject: ${email.subject}
-Original email body: ${email.body}`;
+Original email body: ${email.body}
+
+Use RECIPIENT CONTEXT only to understand and address the recipient. Every statement about the sender company, its products, capabilities, benefits, proof, pricing, and positioning must come exclusively from APPROVED COMPANY KNOWLEDGE. Do not invent commitments or unsupported claims.`;
 
   return generateWithHermes(prompt, fallback, 'draft-email-reply');
 }
 
-export async function generateLeadBrief(leads, approvals, company) {
+export async function generateLeadBrief(leads, approvals, company, products) {
+  const companyContext = requireCompanyKnowledge(company, products);
   const fallback = {
     summary: `${company.name} has ${leads.length} active lead${leads.length === 1 ? '' : 's'} and ${approvals.filter((item) => item.status === 'pending').length} pending approval${approvals.filter((item) => item.status === 'pending').length === 1 ? '' : 's'}.`,
     priorities: leads.slice(0, 3).map((lead) => ({
@@ -82,9 +77,14 @@ export async function generateLeadBrief(leads, approvals, company) {
   };
 
   const prompt = `Return only valid JSON for a CRM manager briefing.
-Company: ${company.name} - ${company.description}
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
+
+CRM RECORDS TO SUMMARIZE:
 Leads: ${JSON.stringify(leads)}
 Approvals: ${JSON.stringify(approvals)}
+
+Use CRM records only for contact, status, and activity facts. Evaluate fit and recommend messaging exclusively against APPROVED COMPANY KNOWLEDGE.
 
 Schema:
 {"summary":"","priorities":[{"leadId":"","title":"","action":""}],"risks":[""]}`;
@@ -93,6 +93,7 @@ Schema:
 }
 
 export async function generateNextBestAction(lead, company, products) {
+  const companyContext = requireCompanyKnowledge(company, products);
   const productName = getPrimaryProductName(products);
   const fallback = {
     action: lead.nextAction || 'Send a concise qualification reply and ask for a meeting.',
@@ -101,9 +102,13 @@ export async function generateNextBestAction(lead, company, products) {
   };
 
   const prompt = `Return only valid JSON with the next best sales action.
-Company: ${company.name}
-Products: ${JSON.stringify(products)}
-Lead: ${JSON.stringify(lead)}
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
+
+LEAD RECORD:
+${JSON.stringify(lead)}
+
+Use the lead record only for recipient needs and CRM status. Base the recommended offer, rationale, and email angle exclusively on APPROVED COMPANY KNOWLEDGE.
 
 Schema:
 {"action":"","rationale":"","emailAngle":""}`;
@@ -112,6 +117,7 @@ Schema:
 }
 
 export async function generateCampaignDraft(company, products, leads) {
+  const companyContext = requireCompanyKnowledge(company, products);
   const topProduct = getPrimaryProductName(products);
   const fallback = {
     subject: topProduct ? `A practical next step with ${topProduct}` : `A quick introduction from ${company.name || 'our team'}`,
@@ -121,10 +127,13 @@ export async function generateCampaignDraft(company, products, leads) {
   };
 
   const prompt = `Return only valid JSON for a small sales nurture campaign.
-Company: ${company.name} - ${company.description}
-Website intelligence: ${formatWebsiteContext(company)}
-Products: ${JSON.stringify(products)}
-Leads: ${JSON.stringify(leads)}
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
+
+AUDIENCE RECORDS:
+${JSON.stringify(leads)}
+
+Use audience records only for recipient selection and personalization. The subject, body, offer, benefits, and positioning must be derived exclusively from APPROVED COMPANY KNOWLEDGE.
 
 Schema:
 {"subject":"","body":"","audience":["lead_id"],"goal":""}`;
@@ -133,27 +142,26 @@ Schema:
 }
 
 export async function generateMarketingEmailDraft({ company, products, leads, template, goal }) {
+  const companyContext = requireCompanyKnowledge(company, products);
   const topProduct = getPrimaryProductName(products);
   const fallback = {
-    subject: template?.subject || (topProduct ? `A practical next step with ${topProduct}` : `A quick introduction from ${company.name || 'our team'}`),
-    body: template?.body || `Hi {{firstName}},\n\n${buildCompanyMessage(company, products)}\n\nWould you be open to a short walkthrough this week?\n\nBest,\n${company.name || 'Our team'}`,
-    rationale: `Drafted for ${leads.length} selected lead${leads.length === 1 ? '' : 's'} using ${template?.name || 'a general'} template.`,
+    subject: topProduct ? `A practical next step with ${topProduct}` : `A quick introduction from ${company.name || 'our team'}`,
+    body: `Hi {{firstName}},\n\n${buildCompanyMessage(company, products)}\n\nWould you be open to a short conversation this week?\n\nBest,\n${company.name || 'Our team'}`,
+    rationale: `Drafted for ${leads.length} selected lead${leads.length === 1 ? '' : 's'} from approved company knowledge.`,
     personalizationFields: ['firstName', 'companyName', 'productName', 'interest']
   };
 
-  const prompt = `You are an AI sales agent with access to approved email templates. Return only valid JSON.
+  const prompt = `You are an AI sales agent. Return only valid JSON.
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
+
+TASK CONTEXT:
 Goal: ${goal || 'Create a concise marketing email for selected leads'}
-Company: ${company.name} - ${company.description}
-Target audience: ${company.targetAudience || ''}
-Value proposition: ${company.valueProposition || ''}
-Preferred tone: ${company.tone || 'professional'}
-Website intelligence for messaging: ${formatWebsiteContext(company)}
-Products: ${JSON.stringify(products)}
 Selected leads: ${JSON.stringify(leads)}
-Template available to agent: ${JSON.stringify(template)}
+Template: ${JSON.stringify(template)}
 
 Use placeholders when useful: {{firstName}}, {{companyName}}, {{productName}}, {{interest}}.
-Keep the email truthful, concise, and suitable for human approval before queue sending.
+Use selected leads only for recipient personalization. Use the template only for layout and tone; ignore any template claim not supported by APPROVED COMPANY KNOWLEDGE. Treat the goal only as a communication objective. Derive every company, product, benefit, offer, and positioning statement exclusively from APPROVED COMPANY KNOWLEDGE.
 
 Schema:
 {"subject":"","body":"","rationale":"","personalizationFields":[""]}`;
@@ -161,12 +169,13 @@ Schema:
   return parseJson(await generateWithHermes(prompt, JSON.stringify(fallback), 'marketing-email-draft'), fallback);
 }
 
-export async function generateBuyerLeads({ company, products, count = 8, region = '', buyerType = '', webCandidates = [] }) {
+export async function generateBuyerLeads({ company, products, count = 8, webCandidates = [] }) {
+  const companyContext = requireCompanyKnowledge(company, products);
   const topProduct = getPrimaryProductName(products);
   const fallback = {
     leads: webCandidates.slice(0, Math.min(Number(count) || 8, 25)).map((candidate) => ({
       companyName: candidate.companyName,
-      address: candidate.address || region || 'Address not found on public page',
+      address: candidate.address || 'Address not found on public page',
       email: candidate.email,
       website: candidate.website || candidate.sourceUrl,
       fitReason: `Web result appears relevant for ${topProduct || company.valueProposition || company.description || 'the company profile'}. ${candidate.snippet || candidate.siteSummary || ''}`.trim(),
@@ -180,16 +189,15 @@ export async function generateBuyerLeads({ company, products, count = 8, region 
 Do not invent companies. Use only companies from webCandidates. You may clean company names and summarize fit.
 Emails are unverified unless webCandidates.emailFoundOnPage is true.
 
-Company: ${JSON.stringify(company)}
-Products: ${JSON.stringify(products)}
-Website intelligence: ${formatWebsiteContext(company)}
-Preferred buyer type: ${buyerType || company.targetAudience || 'best-fit buyers'}
-Preferred region/address area: ${region || company.address || 'any relevant market'}
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
+
 Number of buyer leads: ${Math.min(Number(count) || 8, 25)}
 webCandidates: ${JSON.stringify(webCandidates)}
 
 Each lead must include company name, address, and email id format.
 Do not output placeholder companies.
+Use webCandidates only as prospect identity/contact evidence. Score fit and write interest/fitReason exclusively by comparing each candidate with APPROVED COMPANY KNOWLEDGE.
 
 Schema:
 {"leads":[{"companyName":"","address":"","email":"","website":"","fitReason":"","interest":"","score":0,"verificationStatus":"web_email_found|domain_email_suggested|unverified"}]}`;
@@ -198,21 +206,24 @@ Schema:
 }
 
 export async function generateBuyerIntroEmail({ company, products, buyerLead, template, goal }) {
-  const topProduct = getPrimaryProductName(products) || buyerLead.interest || company.valueProposition || company.description;
+  const companyContext = requireCompanyKnowledge(company, products);
   const fallback = {
     subject: `Intro: ${company.name || 'our team'} for ${buyerLead.companyName}`,
     body: `Hi there,\n\nI am reaching out from ${company.name || 'our team'}. ${buildCompanyMessage(company, products)}\n\nWould you be open to a short introduction this week?\n\nBest,\n${company.name || 'Our team'}`
   };
 
-  const prompt = `Return only valid JSON. Draft a concise introductory B2B email for an AI-generated buyer prospect.
+  const prompt = `Return only valid JSON. Draft a concise introductory B2B email for a buyer prospect.
 Do not mention private data or claim that the buyer requested contact.
 
-Company: ${JSON.stringify(company)}
-Products: ${JSON.stringify(products)}
-Website intelligence: ${formatWebsiteContext(company)}
+APPROVED COMPANY KNOWLEDGE:
+${companyContext}
+
+RECIPIENT AND TASK CONTEXT:
 Buyer lead: ${JSON.stringify(buyerLead)}
-Approved template: ${JSON.stringify(template)}
+Template: ${JSON.stringify(template)}
 Goal: ${goal || 'Introduce the company and ask for a short call'}
+
+Use the buyer lead only for recipient details and personalization. Use the template only for structure and tone. Every statement about the sender company or its offering must come exclusively from APPROVED COMPANY KNOWLEDGE.
 
 Schema:
 {"subject":"","body":""}`;
@@ -233,13 +244,16 @@ export async function summarizeWebsiteForEmail({ company, websiteData }) {
     updatedAt: new Date().toISOString()
   };
 
-  const prompt = `Return only valid JSON. Summarize this company website for CRM email communication.
-Company profile: ${JSON.stringify(company)}
+  const prompt = `Return only valid JSON. Ingest and summarize this company website as approved source material for later CRM communication.
+SAVED COMPANY PROFILE: ${JSON.stringify(company)}
+APPROVED WEBSITE SOURCE MATERIAL:
 Website URL: ${websiteData.url}
 Title: ${websiteData.title}
 Meta description: ${websiteData.description}
 Headings: ${JSON.stringify(websiteData.headings)}
 Visible text: ${websiteData.text.slice(0, 8000)}
+
+Use only SAVED COMPANY PROFILE and APPROVED WEBSITE SOURCE MATERIAL. Do not add outside knowledge or inferred claims.
 
 Schema:
 {"sourceUrl":"","title":"","summary":"","keyMessages":[""],"suggestedAngles":[""],"updatedAt":""}`;
@@ -281,8 +295,11 @@ function buildAgentTask(prompt) {
   return `You are the dedicated Hermes agent for an AI CRM.
 
 Rules:
-- Use only the company, website, product, lead, and email facts supplied below.
+- APPROVED COMPANY KNOWLEDGE is the only permitted source for facts and claims about the sender company, its products, services, capabilities, benefits, proof, pricing, and positioning.
+- During website ingestion, SAVED COMPANY PROFILE and APPROVED WEBSITE SOURCE MATERIAL together are the only permitted sources.
+- Emails, leads, web candidates, templates, and goals are context for recipients, workflow, tone, or structure only. They must never introduce sender-company claims.
 - Do not invent companies, contacts, email addresses, claims, or product capabilities.
+- If requested content is unsupported by APPROVED COMPANY KNOWLEDGE, omit it instead of guessing.
 - Follow the requested output schema exactly.
 - Do not wrap the result in markdown fences.
 
@@ -292,4 +309,50 @@ ${prompt}`;
 
 function createRequestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function requireCompanyKnowledge(company, products) {
+  const profile = {
+    name: company.name || '',
+    website: company.website || '',
+    industry: company.industry || '',
+    email: company.email || '',
+    phone: company.phone || '',
+    address: company.address || '',
+    targetAudience: company.targetAudience || '',
+    valueProposition: company.valueProposition || '',
+    tone: company.tone || '',
+    description: company.description || ''
+  };
+  const websiteInsights = company.websiteInsights || {};
+  const hasProfile = Boolean(profile.name && (profile.description || profile.valueProposition));
+  const hasWebsiteReference = Boolean(
+    profile.website &&
+    (websiteInsights.summary || websiteInsights.keyMessages?.length || websiteInsights.suggestedAngles?.length)
+  );
+
+  if (!hasProfile || !hasWebsiteReference) {
+    const error = new Error('Complete the company profile and gather website intelligence before using AI generation.');
+    error.status = 400;
+    error.expose = true;
+    throw error;
+  }
+
+  return JSON.stringify({
+    companyProfile: profile,
+    products: (products || []).map((product) => ({
+      name: product.name || '',
+      category: product.category || '',
+      price: product.price || '',
+      description: product.description || ''
+    })),
+    websiteReference: {
+      sourceUrl: websiteInsights.sourceUrl || profile.website,
+      title: websiteInsights.title || '',
+      summary: websiteInsights.summary || '',
+      keyMessages: websiteInsights.keyMessages || [],
+      suggestedAngles: websiteInsights.suggestedAngles || [],
+      updatedAt: websiteInsights.updatedAt || null
+    }
+  }, null, 2);
 }
