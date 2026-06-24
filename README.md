@@ -20,8 +20,8 @@ COMPOSIO_USER_ID=owner@example.com
 COMPOSIO_GMAIL_AUTH_CONFIG_ID=ac_your_gmail_auth_config
 COMPOSIO_GMAIL_CONNECTED_ACCOUNT_ID=
 COMPOSIO_GMAIL_TOOLKIT_VERSION=20260506_01
-APP_BASE_URL=http://38.247.188.228
-PUBLIC_BASE_URL=http://38.247.188.228
+APP_BASE_URL=http://38.247.188.228:4001
+PUBLIC_BASE_URL=http://38.247.188.228:4001
 HERMES_BASE_URL=http://127.0.0.1:8642
 HERMES_API_KEY=your_hermes_api_server_key
 HERMES_MODEL=hermes-agent
@@ -46,12 +46,12 @@ Recommended Dokploy settings:
 
 - Build type: Docker Compose
 - Compose file: `docker-compose.yml`
-- Internal app port: `4001` (configure this as the Dokploy domain/service port)
+- Published app port: `4001`
 - Health check path: `/api/health`
 - Environment variables: set the Composio values plus `HERMES_BASE_URL`, `HERMES_API_KEY`, `HERMES_MODEL`, and `HERMES_TIMEOUT_MS`
 
 The Node server serves both the API and the built React app in production.
-The Compose service uses internal port `4001` without publishing a host port, allowing Dokploy to route through its proxy without colliding with older deployments.
+The Compose service publishes host port `4001`, so the app is directly available at `http://38.247.188.228:4001`.
 
 ## Hermes Agent setup
 
@@ -67,7 +67,7 @@ For every AI operation, the CRM sends the company-profile-based prompt directly 
 1. In Composio, create or select a Gmail auth config.
 2. Copy the auth config ID, usually beginning with `ac_`.
 3. Set `COMPOSIO_GMAIL_AUTH_CONFIG_ID` in Dokploy.
-4. Set `APP_BASE_URL` to your deployed app URL, for example `http://38.247.188.228`, so the Gmail authorization callback returns to `/api/gmail/callback`.
+4. Set `APP_BASE_URL` to `http://38.247.188.228:4001` so the Gmail authorization callback returns to `/api/gmail/callback`.
 5. Open the app, enter the Gmail address, and click `Connect`.
 6. After OAuth, use `Check` in the Gmail panel or call:
 

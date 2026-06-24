@@ -2,8 +2,8 @@ services:
   ai-crm:
     build: .
     restart: unless-stopped
-    expose:
-      - "4001"
+    ports:
+      - "4001:4001"
     environment:
       PORT: 4001
       NODE_ENV: production
@@ -12,8 +12,8 @@ services:
       COMPOSIO_GMAIL_AUTH_CONFIG_ID: ${COMPOSIO_GMAIL_AUTH_CONFIG_ID:-}
       COMPOSIO_GMAIL_CONNECTED_ACCOUNT_ID: ${COMPOSIO_GMAIL_CONNECTED_ACCOUNT_ID:-}
       COMPOSIO_GMAIL_TOOLKIT_VERSION: ${COMPOSIO_GMAIL_TOOLKIT_VERSION:-20260506_01}
-      APP_BASE_URL: ${APP_BASE_URL:-http://38.247.188.228}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://38.247.188.228}
+      APP_BASE_URL: ${APP_BASE_URL:-http://38.247.188.228:4001}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://38.247.188.228:4001}
       HOST: ${HOST:-0.0.0.0}
       HERMES_BASE_URL: ${HERMES_BASE_URL:-http://host.docker.internal:8642}
       HERMES_API_KEY: ${HERMES_API_KEY:-}
