@@ -49,8 +49,6 @@ function App() {
   });
   const [buyerGenerator, setBuyerGenerator] = useState({
     count: 8,
-    region: '',
-    buyerType: '',
     goal: 'Send a concise intro email to relevant buyer companies.',
     delaySeconds: 60,
     templateId: ''
@@ -537,8 +535,6 @@ function App() {
           <PanelTitle icon={Users} title="AI Buyer Lead Generation" action={<div className="button-row"><button onClick={generateBuyerLeadList}><Sparkles size={16} /> Generate</button><button className="primary" onClick={queueBuyerIntroEmails}><Send size={16} /> Queue Intros</button></div>} />
           <div className="form-grid">
             <Input label="Lead count" value={String(buyerGenerator.count)} onChange={(count) => setBuyerGenerator({ ...buyerGenerator, count })} />
-            <Input label="Buyer type" value={buyerGenerator.buyerType} onChange={(buyerType) => setBuyerGenerator({ ...buyerGenerator, buyerType })} />
-            <Input label="Region or address area" value={buyerGenerator.region} onChange={(region) => setBuyerGenerator({ ...buyerGenerator, region })} />
             <Input label="Delay between intro emails, seconds" value={String(buyerGenerator.delaySeconds)} onChange={(delaySeconds) => setBuyerGenerator({ ...buyerGenerator, delaySeconds })} />
             <label className="field">
               <span>Intro template</span>

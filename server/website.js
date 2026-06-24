@@ -28,12 +28,17 @@ export async function gatherWebsiteData(inputUrl) {
   }
 }
 
-export async function searchBuyerCompanies({ company, products, count = 8, region = '', buyerType = '' }) {
+export async function searchBuyerCompanies({ company, products, count = 8 }) {
   const productTerms = products.map((product) => product.category || product.name).filter(Boolean).slice(0, 3).join(' ');
+  const websiteTerms = [
+    company.websiteInsights?.summary,
+    ...(company.websiteInsights?.keyMessages || [])
+  ].filter(Boolean).join(' ').slice(0, 300);
   const query = [
-    buyerType || company.targetAudience || company.industry,
-    region || company.address,
+    company.targetAudience || company.industry,
+    company.address,
     productTerms,
+    websiteTerms,
     'company contact email'
   ].filter(Boolean).join(' ');
 
@@ -48,7 +53,7 @@ export async function searchBuyerCompanies({ company, products, count = 8, regio
     const candidate = {
       companyName: cleanCompanyName(result.title),
       website: result.url,
-      address: region || '',
+      address: '',
       email: emailFromText(`${result.title} ${result.snippet}`) || emailFromDomain(result.url),
       snippet: result.snippet,
       sourceUrl: result.url,

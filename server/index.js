@@ -217,7 +217,7 @@ app.post('/api/email/analyze', async (req, res) => {
       createdAt: new Date().toISOString(),
       ...leadData
     };
-    const body = await draftEmailReply(email, lead, current.company);
+    const body = await draftEmailReply(email, lead, current.company, current.products);
     const approval = {
       id: createId('approval'),
       emailId: email.id,
@@ -242,7 +242,7 @@ app.post('/api/email/analyze', async (req, res) => {
 
 app.post('/api/ai/brief', async (req, res) => {
   const state = await loadState();
-  res.json(await generateLeadBrief(state.leads, state.approvals, state.company));
+  res.json(await generateLeadBrief(state.leads, state.approvals, state.company, state.products));
 });
 
 app.post('/api/ai/campaign', async (req, res) => {
@@ -287,19 +287,15 @@ app.post('/api/buyer-leads/generate', async (req, res) => {
   const webSearch = await searchBuyerCompanies({
     company: state.company,
     products: state.products,
-    count: req.body.count || 8,
-    region: req.body.region,
-    buyerType: req.body.buyerType
+    count: req.body.count || 8
   });
   if (!webSearch.candidates.length) {
-    return res.status(502).json({ error: 'No buyer leads found from web search. Try a broader buyer type or region.' });
+    return res.status(502).json({ error: 'No buyer leads found from the current company profile and website intelligence.' });
   }
   const result = await generateBuyerLeads({
     company: state.company,
     products: state.products,
     count: req.body.count || 8,
-    region: req.body.region,
-    buyerType: req.body.buyerType,
     webCandidates: webSearch.candidates
   });
 
@@ -538,7 +534,7 @@ app.get('*', (req, res) => {
 app.use((error, req, res, next) => {
   console.error(error);
   res.status(error.status || 500).json({
-    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message
+    error: process.env.NODE_ENV === 'production' && !error.expose ? 'Internal server error' : error.message
   });
 });
 
